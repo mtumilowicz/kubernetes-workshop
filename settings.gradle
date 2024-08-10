@@ -1,0 +1,4 @@
+rootProject.name = 'kubernetes-workshop'
+include 'customerinfo-app'
+include 'customer-app'
+

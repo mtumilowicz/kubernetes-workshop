@@ -1,0 +1,22 @@
+customerinfo:
+  base-url: ${CUSTOMERINFO_BASE_URL}
+
+---
+
+spring:
+  config:
+    activate:
+      on-profile: local
+
+customerinfo:
+  base-url: http://localhost:8081
+
+---
+
+spring:
+  config:
+    activate:
+      on-profile: cloud
+
+customerinfo:
+  base-url: ${CUSTOMERINFO_BASE_URL}

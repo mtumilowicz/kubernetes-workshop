@@ -1,0 +1,19 @@
+# customerinfo-app-deployment.yml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: customerinfo-app
+  namespace: my-app-namespace
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: customerinfo-app
+  template:
+    metadata:
+      labels:
+        app: customerinfo-app
+    spec:
+      containers:
+        - name: customerinfo-app
+          image: customerinfo-app:0.0.1-SNAPSHOT

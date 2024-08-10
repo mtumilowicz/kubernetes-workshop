@@ -1,0 +1,8 @@
+# customerinfo-configmap.yml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: customerinfo-config
+  namespace: my-app-namespace
+data:
+  CUSTOMERINFO_BASE_URL: "http://customerinfo-app-service:8080"
