@@ -43,6 +43,7 @@
     * [WJUG #270 ONLINE - Krzysztof Suszyński - Knative, Serverless w Kubernetes oraz OpenShift](https://www.youtube.com/watch?v=eYr_E4Qmta4)
     * https://chatgpt.com/
     * https://kubernetes.io
+    * https://medium.com/@amroessameldin/kube-proxy-what-is-it-and-how-it-works-6def85d9bc8f
 
 ## preface
 * goals of this workshop
@@ -132,23 +133,58 @@
             * is also deployed on the master to run the Control Plane components as pods
             * primary "node agent"
         * works in terms of a PodSpec (object that describes a pod)
+            * uses a combination of polling and watching to receive updates about the desired state of resources
         * responsibilities
             * initial task: register the node it’s running on by creating a Node resource
                 * sends regular heartbeats to the API server to confirm that the node is healthy and available
-                * continuously checks for Pods scheduled to the node and starts them
-                    * digression: Kubernetes doesn’t really run containers
-                        * it passes the responsibility to the container runtime installed on the node
-                            * example: Docker, Podman, rkt
-                                * rkt is dead: https://news.ycombinator.com/item?id=22249403
-            * constantly monitors pods on its Node
-                * example: liveness and readiness probes
+            * continuously checks for Pods scheduled to the node and starts them
+                * digression: Kubernetes doesn’t really run containers
+                    * it passes the responsibility to the container runtime installed on the node
+                        * example: Docker, Podman, rkt
+                            * rkt is dead: https://news.ycombinator.com/item?id=22249403
+            * runs the container readiness/liveness probes, restarting containers when the probes fail
+                * Pod is considered ready/live when all of its containers are ready/live
                 * reports back to the API server on a timely basis
                     * API server uses these updates to
                         * track the state of the cluster
                         * make scheduling decisions
-            * reconciliation
-                * uses a combination of polling and watching to receive updates about the desired state of resources
     * kube-proxy
+        * runs on each node
+        * overcomes the problem of Pods’ IPs being changed each time a Pod is recreated
+        * agent doesn’t receive the actual traffic or do any load balancing
+            * translates Service definitions into networking rules as NAT (Network Address Translation)
+                * NAT rules are simply mappings from Service IP to Pod IP
+                    * example: traffic sent to a Service => redirected to a backend Pod
+                        * NAT rules pick one of the Pods according to used mode
+                            * iptables -> random, IPVS -> algorithm
+                * example
+                    1. KUBE-SERVICES is a custom chain created by Kube-Proxy for the Services
+                        ![alt text](img/kube-proxy/iptables-root.png)
+                    1. traffic destined to the Service will enter appropriate chain
+                        ![alt text](img/kube-proxy/iptables-routing.png)
+                        * example: notice a specific chain created with a rule for destination IP of the Service (10.99.231.137)
+                    1. NAT rules
+                        ![alt text](img/kube-proxy/iptables-nat.png)
+                        * notice this statistic mode random probability
+                        * KUBE-SEP correspond to the Service endpoints (SEP)
+                            * contains IP address of each Pod listed for each chain
+        * modes
+            * iptables
+                * default and most widely used
+                * relies on a Linux feature called iptables
+                    * core feature of almost every Linux operating system
+                * uses a sequential approach going through its tables
+                    * it was originally designed as a packet filtering component
+                    * number of lookups increases linearly by increasing the rules
+                * doesn’t support specific load balancing algorithms
+                    * uses a random equal-cost way of distribution
+            * IPVS (IP Virtual Server)
+                * Linux feature designed specifically for load balancing
+                * optimized lookup algorithm with complexity of O(1)
+                * supports different load balancing algorithms
+                    * example: round robin, least connections, and other hashing approaches
+                * might not be present in all Linux systems today
+
 
 
 ## tools
