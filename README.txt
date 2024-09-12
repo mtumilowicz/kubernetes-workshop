@@ -42,6 +42,7 @@
     * [WJUG #266 - Matt Jarvis - Introduction to KUDO - Kubernetes operators the easy way](https://www.youtube.com/watch?v=oHu0WvxOJ2s)
     * [WJUG #270 ONLINE - Krzysztof Suszyński - Knative, Serverless w Kubernetes oraz OpenShift](https://www.youtube.com/watch?v=eYr_E4Qmta4)
     * https://chatgpt.com/
+    * https://kubernetes.io
 
 ## preface
 * goals of this workshop
@@ -105,7 +106,48 @@
         * use a label selector to identify the resources they manage
 * Minion (Worker Node)
     * Pod
+        * a unit of compute, which runs on a single node in the cluster
+            * scheduled according to the resources
+                * example: 2 CPU to run workload
+        * an abstraction
+            * just a logical grouping of containers
+                * often: just a single container
+                * sidecar: additional containers that should be deployed together with main application
+                    * example: authorization, logging
+                * Kubernetes binds them together ensuring they have common lifecycle
+                    * example
+                        * created together
+                        * one fails => they are restarted
+                        * terminated together
+            * there is no notion of Pod in processes running on the node
+                * just a bunch of processes from the containers
+        * like a separate logical machine
+            * with its own IP, hostname, processes, and so on
+            * consists of 1+ containers in the same Linux namespace(s)
+                * all the containers in a pod will appear to be running on the same logical machine
+                    * containers in other pods, even on the same worker node, will appear to be running on a different one
+        * can communicate with other Pods over virtual network, even if they’re running on different nodes
     * kubelet
+        * daemon that runs on every node
+            * is also deployed on the master to run the Control Plane components as pods
+            * primary "node agent"
+        * works in terms of a PodSpec (object that describes a pod)
+        * responsibilities
+            * initial task: register the node it’s running on by creating a Node resource
+                * sends regular heartbeats to the API server to confirm that the node is healthy and available
+                * continuously checks for Pods scheduled to the node and starts them
+                    * digression: Kubernetes doesn’t really run containers
+                        * it passes the responsibility to the container runtime installed on the node
+                            * example: Docker, Podman, rkt
+                                * rkt is dead: https://news.ycombinator.com/item?id=22249403
+            * constantly monitors pods on its Node
+                * example: liveness and readiness probes
+                * reports back to the API server on a timely basis
+                    * API server uses these updates to
+                        * track the state of the cluster
+                        * make scheduling decisions
+            * reconciliation
+                * uses a combination of polling and watching to receive updates about the desired state of resources
     * kube-proxy
 
 
