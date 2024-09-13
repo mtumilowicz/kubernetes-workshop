@@ -44,6 +44,7 @@
     * https://chatgpt.com/
     * https://kubernetes.io
     * https://medium.com/@amroessameldin/kube-proxy-what-is-it-and-how-it-works-6def85d9bc8f
+    * https://dzone.com/articles/journey-of-deployment-creation-in-kubernetes
 
 ## preface
 * goals of this workshop
@@ -65,6 +66,17 @@
         * curl http://localhost:8080/customer/123/full-info
             * to get full info, `customer` is querying `customerinfo`
 
+## introduction
+* rationale
+    * problem: running containers on dedicated individual machines
+    * solution: utilize a shared pool (cluster) of interconnected machines (nodes) and container orchestrator
+        * container orchestrator responsibilities
+            * dynamically manages and distributes container workloads across resource pool
+            * optimizes resource utilization, enhancing scalability, and improving fault tolerance
+* kubernetes
+    * abstraction layer that sits at the workload level on top of the raw compute primitives like VMs
+    (or bare metal machines) and load balancers
+
 ## architecture
 * overview
     ![alt text](img/architecture.png)
@@ -75,12 +87,14 @@
                 * checking the status of a pod
                 * scheduling a new workload
                 * modifying a resource
+                * registration of worker nodes
         * all other components interact through with it
             * example
                 * kubelet (on worker nodes)
                 * controller-manager,
                 * external clients like kubectl
         * provides RESTful interface
+        * authenticates and authorizes
     * Scheduler (kube-scheduler)
         * assigns Pods to Nodes
         * scheduling is an optimization problem:
@@ -95,8 +109,8 @@
             * any node crashing or process dying causes values in etcd to be changed
         * stores actual state of the system and the desired state of the system
             * if diverge => reconciliation
-        * supports `watch` natively
-            * change triggers an event
+        * provides events on changes happening to its keys
+            * exposed over the watch API
             * Kubernetes uses it to monitor changes
                 * controllers (e.g., Deployment, ReplicaSet controllers)
                     * ensure that the cluster's actual state matches the desired state
@@ -185,7 +199,53 @@
                     * example: round robin, least connections, and other hashing approaches
                 * might not be present in all Linux systems today
 
+## resources
+* Kubernetes objects
+    * are persistent entities in the Kubernetes system
+        * represent the state of the cluster
+    * lifecycle can be managed with CRUD commands
+        * `kubectl create`, `kubectl get`, `kubectl apply`, and `kubectl delete`
+    * is a "record of intent"
+        * specification for the desired state of the system
+        * system will work to ensure the current state matches the desired state defined by these objects
+            * example: Pod is just logical grouping - it does not exist physically
+    * ownership
+        * when controller is deleted, its managed objects still exist but not for long
+            * Kubernetes runs a garbage collector process
+        * can model a hierarchy
+            * example: Pods owned by ReplicaSets, and ReplicaSets owned by Deployments
+* Namespace
+    * uses to group other resources
+        * example
+            * one namespace per product, one per team, or a single shared namespace
+    * every resource lives inside a namespace
+    * forms logical separation
+        * provides isolation by name
+            * example: pod named `web-app` in both `namespace-a` and `namespace-b`
+        * do not create hard, physical boundaries
+            * Role-Based Access Control (RBAC) for control access to resources at the namespace level
+        * example: pods in different namespaces can communicate with each other by default
+    * four initial namespaces:
+        * default: objects with no other namespace
+        * kube-system: objects created by the Kubernetes system
+            * example: control plane (API server, controller manager, etc.)
+        * kube-public: readable by all users (including those not authenticated)
+            * mostly unused by default
+            * use case: making cluster-wide, publicly accessible information available without authentication
+        * kube-node-lease: used to manage NodeLease objects
+            * each node in the cluster periodically updates its lease object
+                * used by the control plane to determine the availability of nodes
+            * helps improve the performance and scalability of large clusters
+                * reducing load on etcd
+* deploying workloads
+    * Deployment
+        * steps
+            ![alt text](img/deployment-steps.png)
 
+
+
+
+    * within a namespace, Services are available using a simple domain name
 
 ## tools
 * https://github.com/mtumilowicz/helm-workshop
