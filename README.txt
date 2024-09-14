@@ -81,6 +81,7 @@
 * overview
     ![alt text](img/architecture.png)
 * Master (Control Plane)
+    * decision-making components
     * API Server (kube-apiserver)
         * provides the frontend to the Kubernetes control plane
             * example
@@ -98,8 +99,22 @@
     * Scheduler (kube-scheduler)
         * assigns Pods to Nodes
         * scheduling is an optimization problem:
-            1. determine feasible placements (placements that meet given constraints)
-            1. determine viable placements (feasible placements with the highest score)
+            1. filtering
+                * goal: determine feasible placements (placements that meet given constraints)
+                * filters out the worker nodes that cannot host the pod for some reason
+                    * example: CPU and Memory requests
+                * output: nodes on which pods can be scheduled
+                    * length == 0 => pod will remain pending till this condition is remedied
+                    * length == 1 => scheduling can occur without any actions
+                    * length > 1 => moves to the next stages of scheduling
+            1. scoring
+                * goal: determine viable placements (feasible placements with the highest score)
+                * example of rules used for evaluation:
+                    * node affinity and anti-affinity
+                    * does the node have a container image already?
+                        * no image => it will take time to pull it
+                    * lower workload utilization will give you a higher result
+                * output: node with the highest score is selected for the scheduling of Pod
     * etcd
         * rationale: Kubernetes is distributed => it needs a distributed database
         * distributed key-value store
@@ -116,10 +131,16 @@
                     * ensure that the cluster's actual state matches the desired state
     * Controller Manager (controller-manager)
         * resource that manages other resources
-        * examples: replication controller, endpoints controller, namespace controller, etc
+        * comprises many resource controllers: replication controller, endpoints controller, namespace controller, etc
         * compares current state to the desired state of its resources, and makes any changes necessary
+            * watches for changes in a specific Kubernetes resource using the watch API exposed by the api-server
+            in a never-ending for loop called the control loop
         * use a label selector to identify the resources they manage
+            * simple key-value pairs
+            * used to loosely couple resources
 * Minion (Worker Node)
+    * components that execute the decisions made by Control Plane
+        ![alt text](img/worker-node.png)
     * Pod
         * a unit of compute, which runs on a single node in the cluster
             * scheduled according to the resources
@@ -241,7 +262,35 @@
     * Deployment
         * steps
             ![alt text](img/deployment-steps.png)
-
+        * is a controller
+            * reads the Deployment object and creates a ReplicaSet
+        * technically, a deployment in Kubernetes is made of resources: Pods + Replica-Set
+            * manages a ReplicaSet, which in turn manages the Pods
+                ```
+                spec:
+                  replicas: 1
+                  selector:
+                    matchLabels:
+                      app: customerinfo-app
+                ```
+            * Pods are created based on the template defined in the Deployment
+                ```
+                spec:
+                  ...
+                  template:
+                    metadata:
+                      labels:
+                        app: customerinfo-app
+                    spec:
+                      containers:
+                        - name: customerinfo-app
+                          image: customerinfo-app:0.0.1-SNAPSHOT
+                ```
+    * ReplicaSet
+        * is a controller
+        * Deployments should be first choice for defining applications
+            * don't use ReplicaSets directly
+        * constantly runs a control loop: #(objects it owns) == #(replicas it should have)
 
 
 
