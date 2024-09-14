@@ -138,6 +138,14 @@
         * use a label selector to identify the resources they manage
             * simple key-value pairs
             * used to loosely couple resources
+            * example
+                * Deployment's spec has a `selector.matchLabels` section
+                * PodSpec has a `metadata.labels` section
+                * reason: we need a way to reference Pod from the Deployment
+                    * Pod object actually exists somewhat separately after creation
+                * why it cannot be referenced out of the box as PodSpec is part of Deployment?
+                    * Pods may be needed in other objects
+                        * in particular: network Service references Pod directly, not Deployment
 * Minion (Worker Node)
     * components that execute the decisions made by Control Plane
         ![alt text](img/worker-node.png)
@@ -262,6 +270,11 @@
     * Deployment
         * steps
             ![alt text](img/deployment-steps.png)
+        * rationale: instructing Kubernetes to run Pods directly is not safe
+            * no automatic rescheduling
+                * rebooted if crash, but not in case of node failure
+            * no rolling updates or rollbacks
+            * no scaling
         * is a controller
             * reads the Deployment object and creates a ReplicaSet
         * technically, a deployment in Kubernetes is made of resources: Pods + Replica-Set
@@ -273,7 +286,7 @@
                     matchLabels:
                       app: customerinfo-app
                 ```
-            * Pods are created based on the template defined in the Deployment
+            * Pod object template is referred as the PodSpec
                 ```
                 spec:
                   ...
