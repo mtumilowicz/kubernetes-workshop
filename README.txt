@@ -266,75 +266,111 @@
                 * used by the control plane to determine the availability of nodes
             * helps improve the performance and scalability of large clusters
                 * reducing load on etcd
-* deploying workloads
-    * Deployment
-        * steps
-            ![alt text](img/deployment-steps.png)
-        * rationale: instructing Kubernetes to run Pods directly is not safe
-            * no automatic rescheduling
-                * rebooted if crash, but not in case of node failure
-            * no rolling updates or rollbacks
-            * no scaling
-        * is a controller
-            * reads the Deployment object and creates a ReplicaSet
-        * technically, a deployment in Kubernetes is made of resources: Pods + Replica-Set
-            * manages a ReplicaSet, which in turn manages the Pods
-                ```
+## deploying workloads
+* Deployment
+    * steps
+        ![alt text](img/deployment-steps.png)
+    * rationale: instructing Kubernetes to run Pods directly is not safe
+        * no automatic rescheduling
+            * rebooted if crash, but not in case of node failure
+        * no rolling updates or rollbacks
+        * no scaling
+    * is a controller
+        * reads the Deployment object and creates a ReplicaSet
+    * technically, a deployment in Kubernetes is made of resources: Pods + Replica-Set
+        * manages a ReplicaSet, which in turn manages the Pods
+            ```
+            spec:
+              replicas: 1
+              selector:
+                matchLabels:
+                  app: customerinfo-app
+            ```
+        * Pod object template is referred as the PodSpec
+            ```
+            spec:
+              ...
+              template:
+                metadata:
+                  labels:
+                    app: customerinfo-app
                 spec:
-                  replicas: 1
-                  selector:
-                    matchLabels:
-                      app: customerinfo-app
-                ```
-            * Pod object template is referred as the PodSpec
-                ```
-                spec:
-                  ...
-                  template:
-                    metadata:
-                      labels:
-                        app: customerinfo-app
-                    spec:
-                      containers:
-                        - name: customerinfo-app
-                          image: customerinfo-app:0.0.1-SNAPSHOT
-                ```
-    * ReplicaSet
-        * is a controller
-        * Deployments should be first choice for defining applications
-            * don't use ReplicaSets directly
-        * constantly runs a control loop: #(objects it owns) == #(replicas it should have)
-    * Job, CronJob
-        * controllers
-        * use case: batch processing, periodic tasks
-            * example: resizing images, sending out device notifications, data backups
-        * has notation of completed Pod
-            * terminating with an exit status of success
-                * can't use the default restart policy: Always
-                * Pod won’t be restarted
-                * isn’t deleted when it completes - logs could be examined
-            * should have liveness probes
-                * we can ignore readiness
-                    * no Service that they can be added/removed based on readiness
-        * vs Deployment
-            * Job - tasks that are expected to complete (don’t need to run continuously)
-            * Deployment - continuous application
-                * doesn’t have the notation of a Pod "completing"
-        * replacement for `kubectl exec` on an existing Pod
-            * `kubectl exec` task is sharing the resources with the Pod
-                * affecting the performance
-                * Pod may not have enough resources to handle both
-            * moving tasks to a Job => their own Pod with their own resource allocation
-        * Job is Completed (by terminating with an exit status of success) => work is done
-        * CronJob is a Job controller, which creates Jobs on a set interval
-            * you can do anything in a CronJob that you can do in a Job
-            * spawns a new Job on a schedule, which, in turn, spawns a new Pod
-            * note that CronJob will run on the time zone of your cluster
-                * usually UTC
+                  containers:
+                    - name: customerinfo-app
+                      image: customerinfo-app:0.0.1-SNAPSHOT
+            ```
+* ReplicaSet
+    * is a controller
+    * Deployments should be first choice for defining applications
+        * don't use ReplicaSets directly
+    * constantly runs a control loop: #(objects it owns) == #(replicas it should have)
+* Job, CronJob
+    * controllers
+    * use case: batch processing, periodic tasks
+        * example: resizing images, sending out device notifications, data backups
+    * has notation of completed Pod
+        * terminating with an exit status of success
+            * can't use the default restart policy: Always
+            * Pod won’t be restarted
+            * isn’t deleted when it completes - logs could be examined
+        * should have liveness probes
+            * we can ignore readiness
+                * no Service that they can be added/removed based on readiness
+    * vs Deployment
+        * Job - tasks that are expected to complete (don’t need to run continuously)
+        * Deployment - continuous application
+            * doesn’t have the notation of a Pod "completing"
+    * replacement for `kubectl exec` on an existing Pod
+        * `kubectl exec` task is sharing the resources with the Pod
+            * affecting the performance
+            * Pod may not have enough resources to handle both
+        * moving tasks to a Job => their own Pod with their own resource allocation
+    * Job is Completed (by terminating with an exit status of success) => work is done
+    * CronJob is a Job controller, which creates Jobs on a set interval
+        * you can do anything in a CronJob that you can do in a Job
+        * spawns a new Job on a schedule, which, in turn, spawns a new Pod
+        * note that CronJob will run on the time zone of your cluster
+            * usually UTC
+* StatefulSets
+    * rationale: data-heavy apps typically expect to run in a stable environment
+        * Kubernetes is a dynamic environment
+    * creates Pods with predictable names
+        * created in order from zero up to n
+            * started in order
+                * previous Pod needs to be up and running before next is created
+            * removed in the reverse order
+        * can be individually accessed over DNS
+        * resurrected Pod needs to get the same name, network identity, and state as the one it's replacing
+    * vs Deployment
+        * in the ReplicaSet, there is no way to identify a single Pod
+    * use case: primary instance and one or more secondaries
+        * you might be able to scale the secondaries
+            * but they all need to reach the primary
+                * for example to synchronize their own data
+        * solution: Pod runs a script at startup, which checks to see if it is Pod 0
+            * if it is, the Pod sets itself up as the primary
+            * next Pod doesn’t start until Pod 0 is running
+                * same startup script tells Pod it is not the primary
+                * it sets itself as a secondary and synchronizes data from Pod 0
+* DaemonSets
+    * runs a single replica of a Pod on every node in the cluster
+        * or on a subset of nodes
+    * skip the Kubernetes Scheduler
+        * node goes down => pod is not created elsewhere
+        * new node => pod is deployed to it
+    * common for infrastructure-level concerns
+    * use case: cluster operational reasons
+    * example
+        * administration: logging, monitoring, and security
+        * kube-proxy
 
 
 
-    * within a namespace, Services are available using a simple domain name
 
+* within a namespace, Services are available using a simple domain name
+* With GKE Autopilot, you create standard Kubernetes workloads like
+  Deployments, StatefulSets, and Jobs, specifying the replica counts and the required
+  CPU and memory resources. Autopilot then provisions the necessary compute
+  resources to run your Pods and manages the compute capacity on your behalf.
 ## tools
 * https://github.com/mtumilowicz/helm-workshop
