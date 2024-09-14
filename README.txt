@@ -304,6 +304,33 @@
         * Deployments should be first choice for defining applications
             * don't use ReplicaSets directly
         * constantly runs a control loop: #(objects it owns) == #(replicas it should have)
+    * Job, CronJob
+        * controllers
+        * use case: batch processing, periodic tasks
+            * example: resizing images, sending out device notifications, data backups
+        * has notation of completed Pod
+            * terminating with an exit status of success
+                * can't use the default restart policy: Always
+                * Pod won’t be restarted
+                * isn’t deleted when it completes - logs could be examined
+            * should have liveness probes
+                * we can ignore readiness
+                    * no Service that they can be added/removed based on readiness
+        * vs Deployment
+            * Job - tasks that are expected to complete (don’t need to run continuously)
+            * Deployment - continuous application
+                * doesn’t have the notation of a Pod "completing"
+        * replacement for `kubectl exec` on an existing Pod
+            * `kubectl exec` task is sharing the resources with the Pod
+                * affecting the performance
+                * Pod may not have enough resources to handle both
+            * moving tasks to a Job => their own Pod with their own resource allocation
+        * Job is Completed (by terminating with an exit status of success) => work is done
+        * CronJob is a Job controller, which creates Jobs on a set interval
+            * you can do anything in a CronJob that you can do in a Job
+            * spawns a new Job on a schedule, which, in turn, spawns a new Pod
+            * note that CronJob will run on the time zone of your cluster
+                * usually UTC
 
 
 
