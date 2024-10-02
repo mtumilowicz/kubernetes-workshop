@@ -45,6 +45,8 @@
     * https://kubernetes.io
     * https://medium.com/@amroessameldin/kube-proxy-what-is-it-and-how-it-works-6def85d9bc8f
     * https://dzone.com/articles/journey-of-deployment-creation-in-kubernetes
+    * https://dzone.com/articles/kubernetes-services-explained-cluster-ip-nodeport
+    * https://dzone.com/articles/journey-of-http-request-in-kubernetes-1
 
 ## preface
 * goals of this workshop
@@ -153,6 +155,9 @@
         * a unit of compute, which runs on a single node in the cluster
             * scheduled according to the resources
                 * example: 2 CPU to run workload
+        * short-lived/ephemeral
+            * if a pod dies for any reason, K8s will automatically restart the pod
+                * IP address assigned to that pod changes
         * an abstraction
             * just a logical grouping of containers
                 * often: just a single container
@@ -167,6 +172,7 @@
                 * just a bunch of processes from the containers
         * like a separate logical machine
             * with its own IP, hostname, processes, and so on
+                * `kubectl get pods <pod-name> -o wide`
             * consists of 1+ containers in the same Linux namespace(s)
                 * all the containers in a pod will appear to be running on the same logical machine
                     * containers in other pods, even on the same worker node, will appear to be running on a different one
@@ -194,23 +200,25 @@
     * kube-proxy
         * runs on each node
         * overcomes the problem of Pods’ IPs being changed each time a Pod is recreated
-        * agent doesn’t receive the actual traffic or do any load balancing
-            * translates Service definitions into networking rules as NAT (Network Address Translation)
-                * NAT rules are simply mappings from Service IP to Pod IP
-                    * example: traffic sent to a Service => redirected to a backend Pod
-                        * NAT rules pick one of the Pods according to used mode
-                            * iptables -> random, IPVS -> algorithm
-                * example
-                    1. KUBE-SERVICES is a custom chain created by Kube-Proxy for the Services
-                        ![alt text](img/kube-proxy/iptables-root.png)
-                    1. traffic destined to the Service will enter appropriate chain
-                        ![alt text](img/kube-proxy/iptables-routing.png)
-                        * example: notice a specific chain created with a rule for destination IP of the Service (10.99.231.137)
-                    1. NAT rules
-                        ![alt text](img/kube-proxy/iptables-nat.png)
-                        * notice this statistic mode random probability
-                        * KUBE-SEP correspond to the Service endpoints (SEP)
-                            * contains IP address of each Pod listed for each chain
+        * configuration of request routing on the OS level is done by configuring the IP tables of the OS
+            * configuration of IP tables is done by the kube-proxy
+                * doesn’t receive the actual traffic or do any load balancing
+                * translates Service definitions into networking rules as NAT (Network Address Translation)
+                    * NAT rules are simply mappings from Service IP to Pod IP
+                        * example: traffic sent to a Service => redirected to a backend Pod
+                            * NAT rules pick one of the Pods according to used mode
+                                * iptables -> random, IPVS -> algorithm
+                    * example
+                        1. KUBE-SERVICES is a custom chain created by Kube-Proxy for the Services
+                            ![alt text](img/kube-proxy/iptables-root.png)
+                        1. traffic destined to the Service will enter appropriate chain
+                            ![alt text](img/kube-proxy/iptables-routing.png)
+                            * example: notice a specific chain created with a rule for destination IP of the Service (10.99.231.137)
+                        1. NAT rules
+                            ![alt text](img/kube-proxy/iptables-nat.png)
+                            * notice this statistic mode random probability
+                            * KUBE-SEP correspond to the Service endpoints (SEP)
+                                * contains IP address of each Pod listed for each chain
         * modes
             * iptables
                 * default and most widely used
@@ -267,6 +275,8 @@
             * helps improve the performance and scalability of large clusters
                 * reducing load on etcd
 ## deploying workloads
+* are all controllers
+    * example: Deployment reads spec and creates a ReplicaSet
 * Deployment
     * steps
         ![alt text](img/deployment-steps.png)
@@ -275,8 +285,6 @@
             * rebooted if crash, but not in case of node failure
         * no rolling updates or rollbacks
         * no scaling
-    * is a controller
-        * reads the Deployment object and creates a ReplicaSet
     * technically, a deployment in Kubernetes is made of resources: Pods + Replica-Set
         * manages a ReplicaSet, which in turn manages the Pods
             ```
@@ -300,12 +308,10 @@
                       image: customerinfo-app:0.0.1-SNAPSHOT
             ```
 * ReplicaSet
-    * is a controller
     * Deployments should be first choice for defining applications
         * don't use ReplicaSets directly
     * constantly runs a control loop: #(objects it owns) == #(replicas it should have)
 * Job, CronJob
-    * controllers
     * use case: batch processing, periodic tasks
         * example: resizing images, sending out device notifications, data backups
     * has notation of completed Pod
@@ -331,7 +337,7 @@
         * spawns a new Job on a schedule, which, in turn, spawns a new Pod
         * note that CronJob will run on the time zone of your cluster
             * usually UTC
-* StatefulSets
+* StatefulSet
     * rationale: data-heavy apps typically expect to run in a stable environment
         * Kubernetes is a dynamic environment
     * creates Pods with predictable names
@@ -352,7 +358,7 @@
             * next Pod doesn’t start until Pod 0 is running
                 * same startup script tells Pod it is not the primary
                 * it sets itself as a secondary and synchronizes data from Pod 0
-* DaemonSets
+* DaemonSet
     * runs a single replica of a Pod on every node in the cluster
         * or on a subset of nodes
     * skip the Kubernetes Scheduler
@@ -364,10 +370,123 @@
         * administration: logging, monitoring, and security
         * kube-proxy
 
+### networking
+* Service
+    * rationale: abstraction over a Pod and its network address
+        * analogy: like a Deployment is an abstraction over a Pod and its container
+        * there may be thousands of Pods
+        * they all need to communicate
+        * IP addresses change when Pods are replaced
+    * network address discovery mechanism
+        * provides and maintains a network identity for Pod resource
+    * has internal, cluster-local IP address and DNS record
+        * exception: headless Services
+        * IP address is static for the life of the Service
+        * can be referenced by other Pods
+        * within a namespace, Services are available using a simple domain name
+            * other namespaces: `<service-name>.<namespace>.svc.cluster.local`
+    * spreads the load across the Pods
+        * not linked directly to pods
+            * contain a list of Endpoints (IPs and ports)
+                * `kubectl get endpoints <service-name>`
+                * example: Service that selects pods with the label `app=my-app` automatically creates
+                corresponding endpoint
+                    ```
+                    apiVersion: v1
+                    kind: Endpoints
+                    metadata:
+                      name: my-service
+                    subsets:
+                      - addresses:
+                          - ip: 10.42.1.4
+                          - ip: 10.42.1.5
+                        ports:
+                          - port: 8080
+                            protocol: TCP
+                    ```
+            * link is set up with a label selector
+                * just like the link between Deployments and Pods
+    * routing type
+        * default: ClusterIP
+            * used for: internal traffic
+            * provides static virtual IP address in the cluster
+                * addressable from any Pod within your cluster
+        * NodePort
+            * used for: external traffic
+                * usually in development environments
+            * additionally randomly select any available port on the node/VM between 30000 - 32767
+                * port can be specified manually, but it's problematic to check if the port is available on every node
+                * app can be accesses using `nodeIP:exposedPort`
+                    * to get exposed port: `kubectl get service <service-name>`
+            * pros: gives you the freedom to set up your own load-balancing solution
+            * cons: not practical for users
+                * they need a domain name like `myapp.com` to access app
+        * LoadBalancer
+            * used for: external traffic
+            * is a superset of NodePort and ClusterIP service
+            * managed Kubernetes service like EKS(AWS) provisions a load balancer by itself
+                * you don’t have the hassle setting up a load balancer yourself
+                * managed by: cloud controller manager
+                    * pluggable component used to perform deep integration with the cloud provider
+                        * provisioning Load Balancers, Persistent Storage, VMs, etc.
+                    * every cloud provider has its own implementation
+            * provides external static IP address on top of cluster ip
+                * app can be accessed using `external-ip` taken from `kubectl get service <service-name>`
+                * can be mapped to your domain name (using something like GoDaddy)
+            * pros: takes away the trivial task of configuring and provisioning LBs
+            * vs NodePort
+                * not much difference
+                    * rule of thumb: use the LoadBalancer service first
+                * some automation being done in LoadBalancer
+            * what the service controller does
+                1. gets the list of pods that matches the selector field
+                1. iterates over the pod list and notes down the IP address of the pod
+                1. creates an internal static IP address called the clusterIP
+                1. creates a new K8s resource called Endpoint which basically maps a single IP to multiple IPs
+                    * single IP here is the clusterIP, and the multiple IPs correspond to the pod IPs
+                    * pods get created/destroyed => responsibility of the service controller to update the endpoint resource
+                1. exposes a random port (ranging from 30000-32768) on the worker node
+        * problem: expose more than one application => multiple NodePort / LoadBalancer Services
+            * with each NodePort service you need to deal with the hassle of manually managing the IPs and ports
+            * with each LoadBalancer service, you go on increasing your cloud bill
+            * solution: Ingress
+* Endpoints
+
+* Ingress
+    * in short
+        * Ingress controller - smart proxy running in K8s
+            * analogy: nginx webserver
+            * can be placed in any namespace
+                * automatically detect Ingressess defined in other namespaces on the basis of `ingressClassName`
+        * Ingress - K8s resource that configures the routing logic of the Ingress controller
+            * analogy: nginx.conf file
+            * should be created in the same namespace where the corresponding K8s Service resides
+    * doesn't expose any port
+        * you need service(NodePort/LoadBalancer) in front of it to expose it
+    * important fields
+        * `ingressClassName`
+            * field is used for the selection of ingress controller
+                * usually: only one ingress controller in the cluster
+        * `service`
+            * name of the service on which the request has to be forwarded
+    * example: rules configuration
+        ```
+        rules:
+        - host: "products.myapp.com"
+          http:
+            paths:
+            - pathType: Prefix
+              path: "/products"
+              backend:
+                service:
+                  name: products-app
+                  port:
+                    number: 80
+        - host: "ratings.foo.com
+        ```
 
 
 
-* within a namespace, Services are available using a simple domain name
 * With GKE Autopilot, you create standard Kubernetes workloads like
   Deployments, StatefulSets, and Jobs, specifying the replica counts and the required
   CPU and memory resources. Autopilot then provisions the necessary compute
