@@ -47,6 +47,19 @@
     * https://dzone.com/articles/journey-of-deployment-creation-in-kubernetes
     * https://dzone.com/articles/kubernetes-services-explained-cluster-ip-nodeport
     * https://dzone.com/articles/journey-of-http-request-in-kubernetes-1
+    * https://medium.com/@danielepolencic/kubernetes-challenge-1-counting-endpoints-9d9c49dac2aa
+    * https://medium.com/@muppedaanvesh/a-hands-on-guide-to-kubernetes-endpoints-endpointslices-%EF%B8%8F-1375dfc9075c
+    * https://kubernetes.io/docs/concepts/services-networking/ingress/
+    * https://www.getambassador.io/resources/kubernetes-ingress
+    * https://konghq.com/blog/learning-center/what-is-kubernetes-ingress
+    * https://medium.com/devops-mojo/kubernetes-ingress-overview-what-is-kubernetes-ingress-introduction-to-k8s-ingress-b0f81525ffe2
+    * https://www.solo.io/topics/kubernetes-api-gateway/kubernetes-ingress/
+    * https://www.solo.io/topics/kubernetes-api-gateway/kubernetes-ingress/
+    * https://www.bmc.com/blogs/kubernetes-ingress/
+    * https://www.ibm.com/blog/kubernetes-ingress/
+    * https://www.kerno.io/learn/kubernetes-ingress
+    * https://www.kerno.io/learn/kubernetes-ingress
+
 
 ## preface
 * goals of this workshop
@@ -444,13 +457,18 @@
                 1. creates an internal static IP address called the clusterIP
                 1. creates a new K8s resource called Endpoint which basically maps a single IP to multiple IPs
                     * single IP here is the clusterIP, and the multiple IPs correspond to the pod IPs
+                    * one-to-one mapping between a Service and an Endpoint object
+                        * Endpoint Slices are a more scalable and efficient way to manage endpoints
+                            * introduced in Kubernetes 1.16
+                            * multiple smaller Endpoint Slice objects are created
+                                * each representing a portion of the endpoints
+                    * has an endpoints column that is a collection of IP:port pairs
                     * pods get created/destroyed => responsibility of the service controller to update the endpoint resource
                 1. exposes a random port (ranging from 30000-32768) on the worker node
         * problem: expose more than one application => multiple NodePort / LoadBalancer Services
             * with each NodePort service you need to deal with the hassle of manually managing the IPs and ports
             * with each LoadBalancer service, you go on increasing your cloud bill
             * solution: Ingress
-* Endpoints
 
 * Ingress
     * in short
@@ -484,6 +502,109 @@
                     number: 80
         - host: "ratings.foo.com
         ```
+    * lets you place multiple internal services behind a single external IP
+    * references internal services that are specified as Services with the type NodePort
+    * perform TLS encryption for you
+        * Depending on the server middleware you are using, you may see perfor-
+          mance gains by letting the Ingress load balancer handle the TLS connection (acting
+
+          as a so-called TLS terminator) and communicate to the backend only over HTTP—
+          via a secure network like that of your cloud provider
+          * If you
+            prefer, the Ingress can re-encrypt traffic and connect to your services over HTTPS,
+            but there is no option to pass the unmodified encrypted traffic directly through
+            from the client to the backend
+        * import your certificate and key as a Kubernetes Secret and then reference that secret in your Ingress configuration
+    * can be used to expose multiple internal services to the internet using a single IP, with routing performed by path or host name
+    * layer-7 (L7) load balancer
+        * balances at the HTTP request layer
+        * handles the HTTPS
+        * path-based routing
+    * vs Service
+        * no option for exposing two or more separate services directly on the same load balancer
+        * layer-4 load balancer
+            * balances requests at the network layer
+                * supports variety of protocols (e.g., TCP, UDP, SCTP)
+    * it’s a good place to centralize common concerns
+        * example: make HTTPS an ingress concern
+            * it centralizes certificate management
+    * cloud cost cut
+        * cloud providers often charge based on how many load-balancing external IP addresses are assigned
+        * Ingress to combine several services into one, rather than each being exposed with
+                    its own IP, you can likely save money
+    * you must have an Ingress controller to satisfy an Ingress
+        * creating an Ingress resource has no effect
+        * example: ingress-nginx
+    * typical Kubernetes application has pods running inside a cluster and a load balancer outside
+        * load balancer takes connections from the internet and routes the traffic to an edge proxy that sits inside your cluster
+        * edge proxy is commonly called an ingress controller
+    * The Ingress is responsible for analyzing incoming requests based on predefined rules and forwarding them to the correct destination within the system.
+        * if no rules are specified, all traffic will be sent to a single default backend
+    * acts as a single point of entry, eliminating the need to configure individual services with their own external IP addresses or load balancers
+    * simplifies the process of managing external access to services within a cluster, centralizing traffic routing, load balancing, and secure access
+    * allows multiple services to be exposed on the same IP address, using different hostnames
+    * can route traffic to different services based on the URL path, simplifying the management of complex applications
+    * can be used to implement canary deployments, gradually routing traffic to a new version of a service for testing purposes
+    * Ingress vs Egress
+        * analogy: immigration and emigration
+        * Ingress specifically deals with managing incoming traffic from outside the cluster to services within the cluster
+            * Kubernetes resource with dedicated controllers and configurations
+        * egress in Kubernetes refers to the outgoing traffic from within the cluster to external destinations
+            * mechanism by which services or pods within the cluster can initiate and establish connections to resources outside the cluster, such as databases, APIs, or other external services
+            * typically managed through network policies, firewall rules, or other networking configurations within the cluster or the underlying infrastructure
+    * vs Load Balancer
+        * both are responsible for directing traffic to a service
+        * load balancer is only able to direct toward one service
+        * Ingress can direct toward multiple services in a cluster
+        * Ingress is not a substitute for a load balancer, such as a Network Load Balancer in Google Cloud, as the two serve different purposes in managing network traffic.
+            * Layer 4
+    * In Google Kubernetes Engine (GKE):
+
+      A Google Cloud Network Load Balancer might be used to expose an external IP address for incoming traffic.
+      That traffic is forwarded to an Ingress Controller (like NGINX or GKE's native Ingress), which uses rules to direct traffic to different services inside the cluster.
+      In essence, an NLB provides basic traffic distribution to the cluster, while Ingress gives you the ability to define more detailed rules for routing traffic to the appropriate services or Pods inside the cluster.
+    * Kubernetes API Gateway
+        * more comprehensive solution for managing external access to services
+            * support for various protocols and advanced traffic management features
+    * Ingress controller is an application that runs in a cluster and configures an HTTP load balancer according to Ingress resources.
+        * Different load balancers require different Ingress controller implementations
+        * example: cloud load balancer running externally, software load balancer running in the cluster
+    * lets you consolidate your routing rules into a single resource and expose multiple services under the same IP address
+        * using the same load balancers
+    * enables configuration of resilience (time-outs, rate limiting), content-based routing, authentication and much more
+    * Content-based routing:
+      1. Host-based routing. For example, routing requests with the host header foo.example.com to one group of services and the host header bar.example.com to another group.
+      2. Path-based routing. For example, routing requests with the URI that starts with /serviceA to service A and requests with the URI that starts with /serviceB to service B.
+    * An Ingress controller implements a Kubernetes Ingress and works as a load balancer and reverse proxy entity.
+    * overview
+        ![alt text](img/ingress/fan-out.png)
+    * ingress needs NodePort?
+    * Some different choices of Ingress Controller that Kubernetes supports are:
+      AKS Application Gateway Ingress Controller
+      Istio Ingress
+      Kusk Gateway
+      NGINX Ingress Controller For Kubernetes
+    * Moreover, K8s Ingress offers a single entry point for the cluster, allowing administrators to manage the applications easily and diagnose any routing issues. This decreases the attack surface of the cluster, automatically increasing the overall security.
+    *  Ingress controllers support routing through both the transport layer (OSI – Layer 4) and the application layer (OSI – Layer 7) in the OSI model.
+        * The application layer routing is preferred over simple transport layer routing because it offers greater control, such as load balancing external traffic based on requests.
+    * Simply put, the Ingress controller is an application that runs within the Kubernetes cluster and provisions a load balancer according to the requirements of Ingress. (The load balancer can be a software load balancer, external hardware load balancer, or cloud load balancer, each type requiring different controller implementations.)
+    * As we have discussed, Kubernetes Ingress is an API object that describes the desired state for exposing services to the outside of the Kubernetes cluster. An Ingress Controller is essential because it is the actual implementation of the Ingress API.
+    * ClusterId vs NodePort vs LoadBalancer vs Ingress
+    * Compared to Kubernetes Service, an Ingress is a dedicated load balancer placed in front of the Service.
+    * This is a list of the most popular Ingress controllers.
+      Nginx Ingress Controller
+      Traefik
+      HAProxy Ingress
+      Project Contour
+      Envoy Ingress
+    * If you are using a cloud-managed Kubernetes cluster like EKS, AKS, or GKE, you may also use these Ingress controllers.
+
+      AWS ALB Ingress Controller
+      Azure Application Gateway Ingress Controller
+      GKE Ingress Controller
+    * For example, using the Kubernetes service provided by AWS, aka EKS, and the AWS Load Balancer Ingress Controller, each Ingress creation will provision an AWS Load Balancer. As they charge for each Load Balancer and public IP address, you should minimize the number of them while Ingress helps.
+    * There could be more than one Ingress Controller at the same time in a Kubernetes cluster. The Ingress resource could be implemented using a different controller. To achieve this, Kubernetes supports a resource named `IngressClass` that contains which controller it refers to and additional configuration for the controller.
+        * Different controllers for development, staging, and production environments could be useful, as you may need customized network design and control per environment.
 
 
 
