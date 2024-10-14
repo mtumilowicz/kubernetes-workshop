@@ -428,12 +428,13 @@
             * used for: external traffic
                 * usually in development environments
             * additionally randomly select any available port on the node/VM between 30000 - 32767
-                * port can be specified manually, but it's problematic to check if the port is available on every node
-                * app can be accesses using `nodeIP:exposedPort`
+                * expose a service on a specific port on every node in the cluster
+                    * port can be specified manually => problematic to check if the port is available on every node
+                * app can be accessed using `nodeIP:exposedPort`
                     * to get exposed port: `kubectl get service <service-name>`
             * pros: gives you the freedom to set up your own load-balancing solution
             * cons: not practical for users
-                * they need a domain name like `myapp.com` to access app
+                * they usually want to use a domain name like `myapp.com`, not ips
         * LoadBalancer
             * used for: external traffic
             * is a superset of NodePort and ClusterIP service
@@ -471,119 +472,138 @@
             * solution: Ingress
 
 * Ingress
-    * Key Concepts:
-        * Ingress Controller: A specialized load balancer running in your cluster that handles the routing based on the Ingress rules. Popular options include NGINX, Traefik, and HAProxy.
-        * Ingress Resource: A set of routing rules that determine how to route incoming requests to different services within the cluster.
-    * in short
-        * Simply put, the Ingress controller is an application that runs within the Kubernetes cluster and provisions a load balancer according to the requirements of Ingress. (The load balancer can be a software load balancer, external hardware load balancer, or cloud load balancer, each type requiring different controller implementations.)
-            * As we have discussed, Kubernetes Ingress is an API object that describes the desired state for exposing services to the outside of the Kubernetes cluster. An Ingress Controller is essential because it is the actual implementation of the Ingress API.
-        * Ingress: K8s resource that configures the routing logic of the Ingress controller
-            * analogy: `nginx.conf` file
-            * should be created in the same namespace where the corresponding K8s Service resides
-        * Ingress controller: smart proxy running in K8s
-            * analogy: nginx webserver
+    * rationale: layer-7 (L7) load balancer
+        * Service Load Balancer
+            * is layer-4 (L4) load balancer
+                * balances requests at the network layer (e.g., TCP, UDP, SCTP)
+            * only able to direct toward one service
+    * overview
+        ![alt text](img/ingress/fan-out.png)
+        * typical Kubernetes application has pods running inside a cluster and a network load balancer (NLB) outside
+            * NLB takes connections from the internet and routes the traffic to an edge proxy that sits inside cluster
+                * edge proxy is commonly called an ingress controller
+            * NLB provides basic traffic distribution to the cluster, while Ingress gives you the ability to define more detailed rules
+            * example: access api.example.com
+                1. DNS Resolution
+                    * api.example.com is resolved to the IP address of the Ingress Controller's external load balancer
+                1. load balancer forwards the HTTP request to the Kubernetes Ingress Controller
+                1. routing decision + service discovery
+                    * example: Service of type ClusterIP
+                1. pod selection and routing
+                    * Service forwards the request to one of the available Pods
+    * components
+        * Ingress Controller
+            * smart proxy running in K8s
             * can be placed in any namespace
                 * automatically detect Ingresses defined in other namespaces
-                    * based on the basis of `ingressClassName`
+                    * based on field `ingressClassName`
+            * specialized load balancer running in cluster that handles the routing based on the Ingress rules
+                * actual implementation of the Ingress API
+            * can be a software load balancer, external hardware load balancer, or cloud load balancer
+                * each type requiring different controller implementations
+            * could be more than one Ingress Controller at the same time in a Kubernetes cluster
+                * Kubernetes supports a resource named `IngressClass` that contains which controller it refers to
+                * example: different controllers for development, staging, and production
             * examples
                 * AKS Application Gateway Ingress Controller
                 * Istio Ingress
                 * Kusk Gateway
                 * NGINX Ingress Controller For Kubernetes
-    * overview
-        ![alt text](img/ingress/fan-out.png)
-    * needs service(NodePort/LoadBalancer) in front of it to expose it
-        * typical Kubernetes application has pods running inside a cluster and a load balancer outside
-            * load balancer takes connections from the internet and routes the traffic to an edge proxy that sits inside cluster
-                * example: Google Cloud Network Load Balancer
-                    * NLB provides basic traffic distribution to the cluster, while Ingress gives you the ability to define more detailed rules
-            * edge proxy is commonly called an ingress controller
+        * Ingress Resource
+            * describes the desired state for exposing services to the outside of the Kubernetes cluster
+            * set of routing rules that determine how to route incoming requests to different services within the cluster
+                * host-based routing
+                    * example
+                        * typical HTTP GET
+                            ```
+                            GET /v1/users HTTP/1.1
+                            Host: api.example.com // here we specify host
+                            User-Agent: curl/7.68.0
+                            Accept: */*
+                            ```
+                        * `api.example.com` should route to Service 1
+                        * `frontend.example.com` should route to Service 2
+                * path-based routing
+                    * example
+                        * requests with the URI that starts with `/serviceA` to service A
+                        * requests with the URI that starts with `/serviceB` to service B
+            * should be created in the same namespace where the corresponding K8s Service resides
+        * analogy
+            * Ingress Resource ~> `nginx.conf` file
+            * Ingress controller ~> nginx webserver
+    * needs Service (NodePort/LoadBalancer) in front of it to expose it
         * NodePort: allows external traffic to access the service via any node's IP
         * LoadBalancer: exposes the service externally with a public IP address
             * commonly used in cloud environments (like AWS, GCP, or Azure)
                 * cloud provider creates a Load Balancer in front of Ingress controller to route traffic into the cluster
-    * consolidate routing rules into a single resource and expose multiple services under the same IP address
-        * example: typical HTTP GET request to api.example.com
-            ```
-            GET /v1/users HTTP/1.1
-            Host: api.example.com
-            User-Agent: curl/7.68.0
-            Accept: */*
-            ```
-        * host-based routing
-            * example: host header `foo.example.com` to one group of services and the host header `bar.example.com` to another group
-            * Example Scenario:
-              Imagine you have two services running inside your Kubernetes cluster:
-
-              Service 1 (an API) running on port 8080.
-              Service 2 (a frontend) running on port 80.
-              You want both services to be accessible from outside the cluster, but you'd like to use different domain names for each service. For instance:
-
-              api.example.com should route to Service 1.
-              frontend.example.com should route to Service 2.
-        * path-based routing
-            * example: requests with the URI that starts with `/serviceA` to service A and requests with the URI that starts with `/serviceB` to service B
     * pros
         * single point of entry
-            * centralizing traffic routing, load balancing, and secure access
+            * centralizing
+                * traffic routing
+                * load balancing
+                    * expose multiple services under the same IP address
+                * secure access, certificate management
+                    * may result in performance gains: so-called TLS terminator
+                        * handle the TLS connection and rest of backend communication is done only over
+                        HTTP via a secure network
+                        * there is no option to pass the unmodified encrypted traffic directly to the backend
+                            * can re-encrypt traffic and connect to your services over HTTPS
             * decreases the attack surface of the cluster
-        * perform TLS encryption
-            * centralizes certificate management
-            * may result in performance gains: so-called TLS terminator
-                * handle the TLS connection and rest of backend communication is done only over
-                HTTP via a secure network
-                * there is no option to pass the unmodified encrypted traffic directly to the backend
-                    * Ingress can re-encrypt traffic and connect to your services over HTTPS
         * cloud cost cut
-            * cloud providers often charge based on how many load-balancing external IP addresses are assigned
+            * rationale: cloud providers often charge based on how many load-balancing external IP addresses are assigned
                 * Ingress combines several services into one
                     * rather than each being exposed with its own IP
                 * example: AWS Kubernetes (EKS) + AWS Load Balancer Ingress Controller => each Ingress creation will provision an AWS Load Balancer
                     * they charge for each Load Balancer and public IP address
         * can be used to implement canary deployments
-        * There could be more than one Ingress Controller at the same time in a Kubernetes cluster. The Ingress resource could be implemented using a different controller. To achieve this, Kubernetes supports a resource named `IngressClass` that contains which controller it refers to and additional configuration for the controller.
-            * Different controllers for development, staging, and production environments could be useful, as you may need customized network design and control per environment.
-    * layer-7 (L7) load balancer
-        *  Ingress controllers support routing through both the transport layer (OSI – Layer 4) and the application layer (OSI – Layer 7) in the OSI model.
-            * The application layer routing is preferred over simple transport layer routing because it offers greater control, such as load balancing external traffic based on requests.
-        * balances at the HTTP request layer
-        * handles the HTTPS
-        * path-based routing
-    * vs Service
-        * no option for exposing two or more separate services directly on the same load balancer
-        * layer-4 load balancer
-            * balances requests at the network layer
-                * supports variety of protocols (e.g., TCP, UDP, SCTP)
     * Ingress vs Egress
         * analogy: immigration and emigration
         * Ingress: incoming traffic to cluster
             * Kubernetes resource with dedicated controllers and configurations
         * egress: outgoing traffic from cluster
-            * mechanism by which services or pods within the cluster can initiate and establish connections to resources outside the cluster, such as databases, APIs, or other external services
+            * mechanism of establishing connections to resources outside the cluster
+                * example: databases, APIs etc
             * managed through network policies, firewall rules, or other networking configurations
-    * vs Load Balancer
-        * both are responsible for directing traffic to a service
-        * load balancer is only able to direct toward one service
-        * Ingress can direct toward multiple services in a cluster
-        * Ingress is not a substitute for a load balancer, such as a Network Load Balancer in Google Cloud, as the two serve different purposes in managing network traffic.
-            * Layer 4
-    * Kubernetes API Gateway
+                * example: block any outgoing external communication apart to kafka
+                    * global block all egress policy
+                        ```
+                        apiVersion: networking.k8s.io/v1
+                        kind: NetworkPolicy
+                        metadata:
+                          name: block-all-egress
+                          namespace: default  # Set the correct namespace
+                        spec:
+                          podSelector: {}  # Apply to all pods
+                          policyTypes:
+                            - Egress
+                          egress: []  # Empty egress block means no outgoing traffic is allowed
+                        ```
+                    * selective allow egress policy
+                        ```
+                        apiVersion: networking.k8s.io/v1
+                        kind: NetworkPolicy
+                        metadata:
+                          name: allow-kafka-egress
+                          namespace: default  # Set to your appropriate namespace
+                        spec:
+                          podSelector:
+                            matchLabels:
+                              app: my-app  # Pods that need access to Kafka
+                          policyTypes:
+                            - Egress
+                          egress:
+                            # Allow traffic to Kafka broker IP
+                            - to:
+                                - ipBlock:
+                                    cidr: 192.168.100.100/32  #IP of Kafka broker
+                              ports:
+                                - protocol: TCP
+                                  port: 9092  # Default Kafka port for communication
+                        ```
+    * vs Kubernetes API Gateway
         * more comprehensive solution for managing external access to services
             * support for various protocols and advanced traffic management features
                 * example: authentication, rate limiting, request/response transformation, monitoring, and caching
-    * ClusterId vs NodePort vs LoadBalancer vs Ingress
-    * Flow of request
-        * access api.example.com
-        1. DNS Resolution
-            * api.example.com is resolved to the IP address of the Ingress Controller's external load balancer
-        1. load balancer forwards the HTTP request to the Kubernetes Ingress Controller
-        1. Routing Decision
-        1. Service Discovery
-            * Ingress Controller now routes the request internally within the cluster
-                * Kubernetes Service of type ClusterIP
-                    * stable internal endpoint for routing traffic to the correct Pods
-        1. Pod Selection and Routing
-            * Service forwards the request to one of the available Pods.
 
 
 
