@@ -604,7 +604,27 @@
         * more comprehensive solution for managing external access to services
             * support for various protocols and advanced traffic management features
                 * example: authentication, rate limiting, request/response transformation, monitoring, and caching
-
+### Config
+* Kubernetes supports configuration injection with two resource types: `ConfigMaps` and `Secrets`
+* `ConfigMap`
+    * rationale: stores some data that can be loaded into a Pod
+        * pod descriptor is source code => configuration should be moved out of the pod description
+    * key/value pairs
+    * contents are passed to containers as either environment variables or as files in a volume
+        * application doesn’t even know that ConfigMap exists
+    * can be used to store entire files
+        * typically, these files would be configuration files
+            * my.cnf for MariaDB, redis.conf for Redis
+        * example
+            1. spring boot `application.yml` + https://github.com/ahilsend/vaultify
+                * https://github.com/mtumilowicz/java-springboot-cloud-vault-workshop
+            1. redis image + mount config file using ConfigMap
+                * no need to build image just to provide this one file
+* `Secret`
+    * https://github.com/mtumilowicz/bitnami-sealed-secrets-workshop
+    * every pod has a secret volume attached to it automatically
+        * contains three entries: `ca.crt`, `namespace`, and `token`
+            * everything to securely talk to the Kubernetes API server
 
 
 
