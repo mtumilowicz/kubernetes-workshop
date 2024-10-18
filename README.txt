@@ -359,18 +359,22 @@
                 * previous Pod needs to be up and running before next is created
             * removed in the reverse order
         * can be individually accessed over DNS
-        * resurrected Pod needs to get the same name, network identity, and state as the one it's replacing
+        * resurrected Pod gets the same name, network identity, and state as killed one
     * vs Deployment
         * in the ReplicaSet, there is no way to identify a single Pod
-    * use case: primary instance and one or more secondaries
-        * you might be able to scale the secondaries
-            * but they all need to reach the primary
-                * for example to synchronize their own data
-        * solution: Pod runs a script at startup, which checks to see if it is Pod 0
-            * if it is, the Pod sets itself up as the primary
-            * next Pod doesn’t start until Pod 0 is running
-                * same startup script tells Pod it is not the primary
-                * it sets itself as a secondary and synchronizes data from Pod 0
+            * all Pods share the same specification
+    * can use this uniqueness and guaranteed ordering to assign different roles to the different unique Pods
+        * example: primary instance and one or more secondaries
+            * you might be able to scale the secondaries
+                * but they all need to reach the primary
+                    * for example to synchronize their own data
+            * solution: Pod runs a script at startup, which checks to see if it is Pod 0
+                * if it is, the Pod sets itself up as the primary
+                * next Pod doesn’t start until Pod 0 is running
+                    * same startup script tells Pod it is not the primary
+                    * it sets itself as a secondary and synchronizes data from Pod 0
+    * often used with headless Service
+        * each Pod in the StatefulSet is unique => useful to be able to address them individually
 * DaemonSet
     * runs a single replica of a Pod on every node in the cluster
         * or on a subset of nodes
@@ -470,7 +474,11 @@
             * with each NodePort service you need to deal with the hassle of manually managing the IPs and ports
             * with each LoadBalancer service, you go on increasing your cloud bill
             * solution: Ingress
-
+        * addition: headless service
+            * indicated by the clusterIP: None
+            * no virtual cluster IP created to balance traffic
+            * querying the Service will return multiple A Records (Address Records)
+                * allows clients to directly address specific Pods
 * Ingress
     * rationale: layer-7 (L7) load balancer
         * Service Load Balancer
@@ -625,6 +633,65 @@
     * every pod has a secret volume attached to it automatically
         * contains three entries: `ca.crt`, `namespace`, and `token`
             * everything to securely talk to the Kubernetes API server
+### Storage
+* managing data adds a lot of complexity to your Kubernetes applications
+    * problems: backups, snapshots, rollbacks
+        * a managed database service will probably give you that out of the box
+    * should you even use k8s to run stateful apps like databases?
+* analogy
+    * nodes are the Kubernetes representation of a VM
+    * volumes are the Kubernetes representation of a disk
+* `PersistentVolume`
+    * abstraction for the physical storage device that attached to the cluster
+    * disk resources themselves
+    * low level representation of a storage volume
+    * independent of the lifecycle of the Pods
+    * not namespaced, it is available to whole cluster
+    * types
+        * AWS Elastic Block Store (EBS)
+        * GCE Persistent Disk
+        * etc
+* PersistentVolumeClaim
+    * can be thought of as a request for resources
+        * platform-agnostic terms
+        * example: 1 megabyte of storage
+    * has a lifecycle that starts as a request and becomes a claim when bound
+        * example: PersistentVolumeClaim after it’s bound is updated with `volumeName` of linked volume
+        * is deleted => PV and the disk resource that backs it are deleted
+            * default `reclaimPolicy`: Delete
+                * `Retain` = disk resource is not deleted
+    * binding between a Pod and Persistent Volume
+        * Pod request the Volume through the PVC
+    * when created => k8s creates/matches it with a PersistentVolume
+        * `StorageClass` allows for dynamic provisioning of Persistent Volumes
+            * abstracts underlying storage provider
+                * example: cloud provider
+            * bind to PVC with `storageClassName`
+    * StatefulSet
+        * stable Pod identifier is linked to a particular PVC
+        * deleted => PVC not removed
+        * re-create => PVC reattached
+            * no data lost
+        * `volumeClaimTemplates` ~ Pod template in Deployment
+            * each Pod will have a PVC created based on this template
+            * PVC name: {pvc-name}-{pod-name}
+                * example: postgres-pvc-postgres-0
+    * PV vs PVc
+        * PVs are resources in the cluster
+        * PVCs are requests for those resources and also act as claim checks to the resource
+* `EmptyDir`
+    * allocated on space from the node’s boot disk
+        * node becomes unhealthy => all data is lost
+        * Pod is deleted or moved to another node => cannot access data
+    * use case: share data between containers in the same Pod
+        * pods can have multiple containers
+            * `emptyDir` mounts can be shared between them
+        * example
+            1. on-disk cache
+            1. init container setup steps for the main container
+
+
+
 
 
 
