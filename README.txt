@@ -54,11 +54,11 @@
     * https://konghq.com/blog/learning-center/what-is-kubernetes-ingress
     * https://medium.com/devops-mojo/kubernetes-ingress-overview-what-is-kubernetes-ingress-introduction-to-k8s-ingress-b0f81525ffe2
     * https://www.solo.io/topics/kubernetes-api-gateway/kubernetes-ingress/
-    * https://www.solo.io/topics/kubernetes-api-gateway/kubernetes-ingress/
     * https://www.bmc.com/blogs/kubernetes-ingress/
-    * https://www.ibm.com/blog/kubernetes-ingress/
     * https://www.kerno.io/learn/kubernetes-ingress
-    * https://www.kerno.io/learn/kubernetes-ingress
+    * https://medium.com/@maheshwar.ramkrushna/rbac-in-kubernetes-b6c4c23432ef
+    * https://medium.com/rahasak/kubernetes-role-base-access-control-with-service-account-e4c65e3f25cc
+    * https://github.com/ahmetb/kubernetes-network-policy-recipes/blob/master
 
 
 ## preface
@@ -689,10 +689,83 @@
         * example
             1. on-disk cache
             1. init container setup steps for the main container
-
-
-
-
+### Security
+* security
+    * Pod's `securityContext` properties
+        * Kubernetes admission controller can be used to automatically add it to every Pod
+            * executed via webhooks when you create an object
+            * two types
+                * validating
+                    * accept or reject the Kubernetes object
+                * mutating
+                    * modify (or mutate) the incoming requests
+                    * executed before the objects are persisted in etcd
+        * limit what functions Pod can use
+            * by default: Pod is free to request whatever capabilities it wants
+                * example: root access
+                    * risk: anyone with kubectl access to the cluster has root privileges
+            * important fields
+                * `runAsNonRoot`
+                    * distinct from having root on the node
+                * `runAsUser`
+                    * root is always user 0
+                * `allowPrivilegeEscalation`
+        * steps
+            1. Webhook Service Deployment
+                * `image: your-webhook-image:latest`
+                    * example: webhook handler written in go
+            1. Webhook Service
+            1. MutatingWebhookConfiguration
+    * role-based access control (RBAC)
+        * managing access to resources
+            * allow or deny access to a resource
+        * example
+            * ensure that developers only deploy certain apps to a given namespace
+            * infrastructure management teams have view-only access for monitoring tasks
+        * subjects
+            * `User`
+                * human users
+            * `ServiceAccount`
+                * provides an identity for a process that runs in a pod
+                    * non-human account
+                * has an associated token that Pods can use to authenticate against the Kubernetes API server
+                    * mounted to it as a secret
+                * every pod created without specifying a Service Account gets assigned the default
+                    * default Service Account is created every time namespace is created
+        * components
+            * Role
+                * set of permissions that grants access to resources in a specific namespace
+            * RoleBinding
+                * associates a set of users or groups with a Role
+            * ClusterRole/ClusterRoleBinding
+                * cluster-wide (across all namespaces)
+        * authorization flow
+            1. identify the namespace of the resource being accessed
+            1. verifying if there is a matching Role or ClusterRole
+            1. checking if User/ServiceAccount is included in the RoleBinding
+        * does not control network access
+            * example: does not prevent Pods from sending network requests to each other
+            * solution: network policy
+    * Network policies
+        * by default, every Pod can talk to every other Pod
+            * in particular: across namespaces
+        * control traffic to and from the network and other Pods
+            * example: restrict Pods in a namespace from being accessed from other namespaces
+                ```
+                kind: NetworkPolicy
+                apiVersion: networking.k8s.io/v1
+                metadata:
+                  namespace: default
+                  name: deny-from-other-namespaces
+                spec:
+                  podSelector:
+                    matchLabels:
+                  ingress:
+                  - from:
+                    - podSelector: {}
+                ```
+    * container security
+        * https://github.com/mtumilowicz/spring-boot-webapp-docker-workshop
 
 
 * With GKE Autopilot, you create standard Kubernetes workloads like
