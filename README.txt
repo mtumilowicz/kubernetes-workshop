@@ -97,6 +97,7 @@
     ![alt text](img/architecture.png)
 * Master (Control Plane)
     * decision-making components
+    * is offered as a managed service
     * API Server (kube-apiserver)
         * provides the frontend to the Kubernetes control plane
             * example
@@ -113,6 +114,11 @@
         * authenticates and authorizes
     * Scheduler (kube-scheduler)
         * assigns Pods to Nodes
+            * tries to spread Pods across available nodes
+            * doesn't enforce strict Pod spreading rules
+                * unless specific affinity or anti-affinity rules are applied
+                * most Kubernetes platforms enable default Pod-spreading policies
+                    * example: across multiple zones
         * scheduling is an optimization problem:
             1. filtering
                 * goal: determine feasible placements (placements that meet given constraints)
@@ -130,6 +136,14 @@
                         * no image => it will take time to pull it
                     * lower workload utilization will give you a higher result
                 * output: node with the highest score is selected for the scheduling of Pod
+        * another important attribute
+                to increase availability is to ensure that your Pods are spread across multiple nodes.
+                * After all, if you design for multiple replicas, but all those replicas run on the same
+                  node, you’re still at risk from a single point of failure if that node were to become
+                  unhealthy.
+                * Fortunately, most Kubernetes platforms (including Google Kubernetes
+                  Engine) enable default Pod-spreading policies that will spread Pods over all available
+                  nodes and across multiple zones (in the case of a regional cluster).
     * etcd
         * rationale: Kubernetes is distributed => it needs a distributed database
         * distributed key-value store
@@ -168,6 +182,9 @@
         * a unit of compute, which runs on a single node in the cluster
             * scheduled according to the resources
                 * example: 2 CPU to run workload
+                * GKE Autopilot provisions the necessary compute resources to run your
+                Pods and manages the compute capacity
+                    * based on specified required CPU and memory resources
         * short-lived/ephemeral
             * if a pod dies for any reason, K8s will automatically restart the pod
                 * IP address assigned to that pod changes
@@ -186,10 +203,14 @@
         * like a separate logical machine
             * with its own IP, hostname, processes, and so on
                 * `kubectl get pods <pod-name> -o wide`
+            * own network namespace
+                * no port conflict between Pods
+                * example: multiple Pods can run a container on port 80
             * consists of 1+ containers in the same Linux namespace(s)
                 * all the containers in a pod will appear to be running on the same logical machine
                     * containers in other pods, even on the same worker node, will appear to be running on a different one
-        * can communicate with other Pods over virtual network, even if they’re running on different nodes
+        * can communicate with all other Pods in the cluster directly (over virtual network)
+            * without needing NAT (Network Address Translation)
     * kubelet
         * daemon that runs on every node
             * is also deployed on the master to run the Control Plane components as pods
@@ -755,22 +776,51 @@
                 kind: NetworkPolicy
                 apiVersion: networking.k8s.io/v1
                 metadata:
-                  namespace: default
+                  namespace: namespace1
                   name: deny-from-other-namespaces
                 spec:
                   podSelector:
                     matchLabels:
-                  ingress:
+                  ingress: // policy pertains to ingress traffic
                   - from:
-                    - podSelector: {}
+                    - podSelector: {} // selects all Pods in namespace1
                 ```
     * container security
         * https://github.com/mtumilowicz/spring-boot-webapp-docker-workshop
-
-
-* With GKE Autopilot, you create standard Kubernetes workloads like
-  Deployments, StatefulSets, and Jobs, specifying the replica counts and the required
-  CPU and memory resources. Autopilot then provisions the necessary compute
-  resources to run your Pods and manages the compute capacity on your behalf.
-## tools
-* https://github.com/mtumilowicz/helm-workshop
+## troubleshooting
+* `kubectl describe pod $POD_NAME`
+    * view details about its events, container statuses, resource limits
+    * usable
+* `kubectl logs $POD_NAME`
+* typical errors
+    * `ERRIMAGEPULL`, `ERRIMAGEPULLBACKOFF`
+        * Kubernetes is unable to download the container image
+        * root causes
+            * image name was misspelled in configuration
+            * image doesn’t exist in repository
+            * cluster cannot access the repository
+                * example: network or authentication issue
+    * stuck in pending
+        * Pod has been accepted by the cluster, but it cannot be scheduled onto a node
+        * root causes
+            * scheduler is unable to find space to deploy
+        * fix
+            * check the event log for `FailedScheduling`
+            * relax affinity rules or node selectors
+    * CrashLoopBackOff
+        * Pod is repeatedly crashing after starting
+        * root causes
+            * container failed to start
+            * container crashes soon after starting
+            * readiness/liveness probes are failing, causing Kubernetes to restart the Pod.
+        * fix
+            * check logs
+                * for application errors
+                    * example: "Port already in use", "Failed to connect to database", etc
+            * adjust liveness/readiness probes if they are too strict
+                * example: too long db migrations
+    * RunContainerError
+        * container runtime failed to start the container after it was created
+        * root causes
+            * misconfigured command or args fields in the Pod spec
+            * insufficient resources, such as CPU or memory, during startup
