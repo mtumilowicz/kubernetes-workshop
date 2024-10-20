@@ -182,9 +182,18 @@
         * a unit of compute, which runs on a single node in the cluster
             * scheduled according to the resources
                 * example: 2 CPU to run workload
-                * GKE Autopilot provisions the necessary compute resources to run your
-                Pods and manages the compute capacity
-                    * based on specified required CPU and memory resources
+                * Horizontal Pod Autoscaler (HPA)
+                    * automatically scales the number of Pods based on target metrics
+                        * build in: cpu, memory
+                            * source: Kubernetes Metrics Server
+                        * custom: rps, latency, etc
+                            * source: custom metrics provider
+                                * example: Ingress
+                    * applicable to: deployment, replica set, or stateful set
+                    * use case
+                        * scaling web applications based on traffic
+                        * scaling background workers based on job queue size
+                        * scaling services based on request latency or throughput
         * short-lived/ephemeral
             * if a pod dies for any reason, K8s will automatically restart the pod
                 * IP address assigned to that pod changes
@@ -269,7 +278,9 @@
                 * supports different load balancing algorithms
                     * example: round robin, least connections, and other hashing approaches
                 * might not be present in all Linux systems today
-
+    * nodes autoscaling is not part of the base Kubernetes API
+        * optional component in managed Kubernetes
+            * example: GKE Autopilot
 ## resources
 * Kubernetes objects
     * are persistent entities in the Kubernetes system
@@ -319,6 +330,24 @@
             * rebooted if crash, but not in case of node failure
         * no rolling updates or rollbacks
         * no scaling
+    * strategy types
+        * RollingUpdate
+            * default deployment strategy
+            * updates Pods incrementally
+            * parameters (during the update process)
+                * maxSurge
+                    * how many additional Pods can be created
+                    * tradeoff: higher the value => faster rollout but more resources used
+                * maxUnavailable
+                    * how many Pods can be unavailable
+                        * more Pods can be replaced at once
+                    * tradeoff: higher the value => faster rollout but temporarily reducing the  number of ready Pods
+                    * rollout could coincide with another event that lowers availability
+                        * example: node failure
+        * Recreate
+            * terminates all existing Pods before creating new ones
+            * use case: applications that cannot tolerate having multiple versions running simultaneously
+            * cons: downtime
     * technically, a deployment in Kubernetes is made of resources: Pods + Replica-Set
         * manages a ReplicaSet, which in turn manages the Pods
             ```
