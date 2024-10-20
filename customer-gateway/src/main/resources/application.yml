@@ -1,6 +1,10 @@
 customerinfo:
-  base-url: ${CUSTOMERINFO_BASE_URL}
-
+  base-url: http://localhost:8081
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
 ---
 
 spring:

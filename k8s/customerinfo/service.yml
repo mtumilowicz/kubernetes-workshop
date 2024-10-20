@@ -1,12 +1,12 @@
-# customer-app-service.yml
+# customerinfo-app-service.yml
 apiVersion: v1
 kind: Service
 metadata:
-  name: customer-app-service
-  namespace: my-app-namespace
+  name: customerinfo-app-service
+  namespace: customer-backend
 spec:
   selector:
-    app: customer-app
+    app: customerinfo-app
   ports:
     - protocol: TCP
       port: 8080

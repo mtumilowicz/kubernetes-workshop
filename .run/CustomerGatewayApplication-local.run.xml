@@ -1,7 +1,7 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="CustomerAppApplication-local" type="Application" factoryName="Application">
-    <option name="MAIN_CLASS_NAME" value="org.example.CustomerAppApplication" />
-    <module name="kubernetes-workshop.customer-app.main" />
+  <configuration default="false" name="CustomerGatewayApplication-local" type="Application" factoryName="Application">
+    <option name="MAIN_CLASS_NAME" value="org.example.CustomerGatewayApplication" />
+    <module name="kubernetes-workshop.customer-gateway.main" />
     <option name="PROGRAM_PARAMETERS" value="--spring.profiles.active=local" />
     <extension name="coverage">
       <pattern>

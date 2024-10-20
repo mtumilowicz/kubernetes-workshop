@@ -1,0 +1,24 @@
+# customer-gateway-deployment.yml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: customer-gateway
+  namespace: customer-gateway
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: customer-gateway
+  template:
+    metadata:
+      labels:
+        app: customer-gateway
+    spec:
+      containers:
+        - name: customer-gateway
+          image: customer-gateway:0.0.1-SNAPSHOT
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: "cloud"
+            - name: CUSTOMERINFO_BASE_URL
+              value: "http://customerinfo-app-service.customer-backend.svc.cluster.local:8080"

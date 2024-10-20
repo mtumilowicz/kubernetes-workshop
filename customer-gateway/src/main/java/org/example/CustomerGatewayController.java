@@ -8,20 +8,13 @@ import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 
 @RestController
-public class CustomerController {
+public class CustomerGatewayController {
 
     private final WebClient webClient;
 
-    public CustomerController(WebClient.Builder webClientBuilder,
-                              @Value("${customerinfo.base-url}") String baseUrl) {
+    public CustomerGatewayController(WebClient.Builder webClientBuilder,
+                                     @Value("${customerinfo.base-url}") String baseUrl) {
         this.webClient = webClientBuilder.baseUrl(baseUrl).build();
-    }
-
-
-    @GetMapping("/customer/{customerId}/short-info")
-    public String getShortInfo(@PathVariable String customerId) {
-        // Simulate short info (just customer ID in this case)
-        return "Short info for customer " + customerId;
     }
 
     @GetMapping("/customer/{customerId}/full-info")

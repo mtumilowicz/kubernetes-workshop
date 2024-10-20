@@ -1,12 +1,12 @@
-# customerinfo-app-service.yml
+# customer-app-service.yml
 apiVersion: v1
 kind: Service
 metadata:
-  name: customerinfo-app-service
-  namespace: my-app-namespace
+  name: customer-gateway-service
+  namespace: customer-gateway
 spec:
   selector:
-    app: customerinfo-app
+    app: customer-gateway
   ports:
     - protocol: TCP
       port: 8080
