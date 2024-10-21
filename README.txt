@@ -59,6 +59,8 @@
     * https://medium.com/@maheshwar.ramkrushna/rbac-in-kubernetes-b6c4c23432ef
     * https://medium.com/rahasak/kubernetes-role-base-access-control-with-service-account-e4c65e3f25cc
     * https://github.com/ahmetb/kubernetes-network-policy-recipes/blob/master
+    * https://stackoverflow.com/questions/65017380/kubernetes-network-policy-deny-all-policy-not-blocking-basic-communication
+    * https://stackoverflow.com/questions/54168082/how-to-enable-network-policies-in-docker-for-mac-with-kubernetes
 
 
 ## preface
@@ -67,17 +69,21 @@
     1. deploy `customer` and `customer-info` microservice
         * notice how `customer` is deployed wit correct `SPRING_PROFILES_ACTIVE`
             * and how it affects `application.yml` properties
-        * commands
-            ```
-            kubectl apply -f namespace.yml
-            kubectl apply -f customerinfo-configmap.yml
-            kubectl apply -f customer-app-deployment.yml
-            kubectl apply -f customer-app-service.yml
-            kubectl apply -f customerinfo-app-deployment.yml
-            kubectl apply -f customerinfo-app-service.yml
-            ```
-    1. verify that they are able to communicate with each other
-        * curl http://localhost:8080/customer/123/short-info
+        * deploy resources
+            * commands
+                ```
+                kubectl apply -f namespace.yml
+                kubectl apply -f deployment.yml
+                kubectl apply -f service.yml
+                ```
+            * in directories
+                * cd k8s/customer-gateway
+                * cd k8s/customerinfo
+    1. port forward `customer-gateway` to `localhost:8080`
+        * verify it is working: http://localhost:8080/actuator/health
+    1. port forward `customerinfo-app` to `localhost:8081`
+        * http://localhost:8081/actuator/health
+    1. verify that `customer-gateway` is able to communicate with `customerinfo-app`
         * curl http://localhost:8080/customer/123/full-info
             * to get full info, `customer` is querying `customerinfo`
 
@@ -678,11 +684,13 @@
                 * https://github.com/mtumilowicz/java-springboot-cloud-vault-workshop
             1. redis image + mount config file using ConfigMap
                 * no need to build image just to provide this one file
+    * Pod must be in the same namespace
 * `Secret`
     * https://github.com/mtumilowicz/bitnami-sealed-secrets-workshop
     * every pod has a secret volume attached to it automatically
         * contains three entries: `ca.crt`, `namespace`, and `token`
             * everything to securely talk to the Kubernetes API server
+    * Pod must be in the same namespace
 ### Storage
 * managing data adds a lot of complexity to your Kubernetes applications
     * problems: backups, snapshots, rollbacks
@@ -814,6 +822,14 @@
                   - from:
                     - podSelector: {} // selects all Pods in namespace1
                 ```
+        * requires a controller to be installed to enabled the enforcement of NetworkPolicy rules
+            * no default when creating a cluster => policy will have no effect
+            * implemented by the Container Network Interface (CNI) plugins
+                * Flannel
+                * Calico
+                * Weave Net
+                * Cilium
+                * Kube-Router
     * container security
         * https://github.com/mtumilowicz/spring-boot-webapp-docker-workshop
 ## troubleshooting
