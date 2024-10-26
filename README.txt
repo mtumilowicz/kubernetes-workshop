@@ -65,6 +65,7 @@
     * https://stackoverflow.com/questions/65017380/kubernetes-network-policy-deny-all-policy-not-blocking-basic-communication
     * https://stackoverflow.com/questions/54168082/how-to-enable-network-policies-in-docker-for-mac-with-kubernetes
     * [Devoxx Greece 2024 - The Art of Debugging Inside K8s Environment by Andrii Soldatenko](https://www.youtube.com/watch?v=kKO59z58en8)
+    * [Devoxx Greece 2024 - Kubernetes Resiliency by Chris Ayers](https://www.youtube.com/watch?v=R4u5bvWceBQ)
 
 ## preface
 * goals of this workshop
@@ -145,14 +146,9 @@
                         * no image => it will take time to pull it
                     * lower workload utilization will give you a higher result
                 * output: node with the highest score is selected for the scheduling of Pod
-        * another important attribute
-                to increase availability is to ensure that your Pods are spread across multiple nodes.
-                * After all, if you design for multiple replicas, but all those replicas run on the same
-                  node, you’re still at risk from a single point of failure if that node were to become
-                  unhealthy.
-                * Fortunately, most Kubernetes platforms (including Google Kubernetes
-                  Engine) enable default Pod-spreading policies that will spread Pods over all available
-                  nodes and across multiple zones (in the case of a regional cluster).
+        * `topologySpreadConstraints`
+            * automatically spread workloads across different topologies
+                * example: nodes, zones, racks, regions
     * etcd
         * rationale: Kubernetes is distributed => it needs a distributed database
         * distributed key-value store
