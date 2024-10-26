@@ -64,7 +64,7 @@
     * https://github.com/ahmetb/kubernetes-network-policy-recipes/blob/master
     * https://stackoverflow.com/questions/65017380/kubernetes-network-policy-deny-all-policy-not-blocking-basic-communication
     * https://stackoverflow.com/questions/54168082/how-to-enable-network-policies-in-docker-for-mac-with-kubernetes
-
+    * [Devoxx Greece 2024 - The Art of Debugging Inside K8s Environment by Andrii Soldatenko](https://www.youtube.com/watch?v=kKO59z58en8)
 
 ## preface
 * goals of this workshop
@@ -840,6 +840,20 @@
     * view details about its events, container statuses, resource limits
     * usable
 * `kubectl logs $POD_NAME`
+* `kubectl exec -it <pod> sh`
+    * open an interactive shell session inside a running container
+    * problem: images are usually distroless
+        * https://github.com/GoogleContainerTools/distroless
+        * contain only your application and its runtime dependencies
+            * do not contain package managers, shells or any other programs you would expect
+            to find in a standard Linux distribution
+        * solution
+            1. ephemeral debug container
+                * are temporary containers that can be added to an existing pod specifically for debugging purposes
+                    * without needing to restart or modify a running pod
+                * `kubectl debug -it <pod> --image=... --target=<container> --sh`
+                    * adds a temporary container to the pod
+            1. copy pod
 * typical errors
     * `ERRIMAGEPULL`, `ERRIMAGEPULLBACKOFF`
         * Kubernetes is unable to download the container image
