@@ -69,6 +69,14 @@
 
 ## preface
 * goals of this workshop
+    * introduction into k8s architecture
+        * Control Plane vs Minions
+    * understanding components of Worker Nodes
+       * kube-proxy, kubelet
+    * description of basic building blocks for workload deployments
+    * introduction into k8s networking
+    * general overview of handling storage
+    * understanding security and basic methods of troubleshooting
 * workshop plan
     1. deploy `customer` and `customer-info` microservice
         * notice how `customer` is deployed wit correct `SPRING_PROFILES_ACTIVE`
