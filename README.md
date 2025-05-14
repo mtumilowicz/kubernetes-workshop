@@ -163,7 +163,6 @@
     * etcd
         * rationale: Kubernetes is distributed => it needs a distributed database
         * distributed key-value store
-        * runs as a pod in the kube-system namespace
         * store all k8s data
             * anything you might read from a `kubectl get xyz` command is stored in etcd
             * any change you make via `kubectl create` will cause an entry in etcd to be updated
