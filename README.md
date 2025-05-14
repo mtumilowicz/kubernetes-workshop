@@ -135,6 +135,9 @@
             * tries to spread Pods across available nodes
             * doesn't enforce strict Pod spreading rules
                 * unless specific affinity or anti-affinity rules are applied
+                    * example
+                        * affinity: run on nodes labeled as having SSD disks
+                        * anti-affinity: not run on nodes labeled as having a GPU
                 * most Kubernetes platforms enable default Pod-spreading policies
                     * example: across multiple zones
         * scheduling is an optimization problem:
