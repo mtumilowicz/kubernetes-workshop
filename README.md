@@ -116,83 +116,85 @@
 * Master (Control Plane)
     * decision-making components
     * is offered as a managed service
-    * API Server (kube-apiserver)
-        * provides the frontend to the Kubernetes control plane
-            * example
-                * checking the status of a pod
-                * scheduling a new workload
-                * modifying a resource
-                * registration of worker nodes
-        * all other components interact through with it
-            * example
-                * kubelet (on worker nodes)
-                * controller-manager,
-                * external clients like kubectl
-        * provides RESTful interface
-        * authenticates and authorizes
-    * Scheduler (kube-scheduler)
-        * assigns Pods to Nodes
-            * tries to spread Pods across available nodes
-            * doesn't enforce strict Pod spreading rules
-                * unless specific affinity or anti-affinity rules are applied
-                    * example
-                        * affinity: run on nodes labeled as having SSD disks
-                        * anti-affinity: not run on nodes labeled as having a GPU
-                * most Kubernetes platforms enable default Pod-spreading policies
-                    * example: across multiple zones
-        * scheduling is an optimization problem:
-            1. filtering
-                * goal: determine feasible placements (placements that meet given constraints)
-                * filters out the worker nodes that cannot host the pod for some reason
-                    * example: CPU and Memory requests
-                * output: nodes on which pods can be scheduled
-                    * length == 0 => pod will remain pending till this condition is remedied
-                    * length == 1 => scheduling can occur without any actions
-                    * length > 1 => moves to the next stages of scheduling
-            1. scoring
-                * goal: determine viable placements (feasible placements with the highest score)
-                * example of rules used for evaluation:
-                    * node affinity and anti-affinity
-                    * does the node have a container image already?
-                        * no image => it will take time to pull it
-                    * lower workload utilization will give you a higher result
-                * output: node with the highest score is selected for the scheduling of Pod
-        * `topologySpreadConstraints`
-            * automatically spread workloads across different topologies
-                * example: nodes, zones, racks, regions
-    * etcd
-        * rationale: Kubernetes is distributed => it needs a distributed database
-        * distributed key-value store
-        * store all k8s data
-            * anything you might read from a `kubectl get xyz` command is stored in etcd
-            * any change you make via `kubectl create` will cause an entry in etcd to be updated
-            * any node crashing or process dying causes values in etcd to be changed
-        * stores actual state of the system and the desired state of the system
-            * if diverge => reconciliation
-        * provides events on changes happening to its keys
-            * exposed over the watch API
-            * Kubernetes uses it to monitor changes
-                * controllers (e.g., Deployment, ReplicaSet controllers)
-                    * ensure that the cluster's actual state matches the desired state
-    * Controller Manager (controller-manager)
-        * resource that manages other resources
-        * comprises many resource controllers: replication controller, endpoints controller, namespace controller, etc
-        * compares current state to the desired state of its resources, and makes any changes necessary
-            * watches for changes in a specific Kubernetes resource using the watch API exposed by the api-server
-            in a never-ending for loop called the control loop
-        * use a label selector to identify the resources they manage
-            * simple key-value pairs
-            * used to loosely couple resources
-            * example
-                * Deployment's spec has a `selector.matchLabels` section
-                * PodSpec has a `metadata.labels` section
-                * reason: we need a way to reference Pod from the Deployment
-                    * Pod object actually exists somewhat separately after creation
-                * why it cannot be referenced out of the box as PodSpec is part of Deployment?
-                    * Pods may be needed in other objects
-                        * in particular: network Service references Pod directly, not Deployment
+    * components
+        * run as pods in the `kube-system` namespace
+        * API Server (kube-apiserver)
+            * provides the frontend to the Kubernetes control plane
+                * example
+                    * checking the status of a pod
+                    * scheduling a new workload
+                    * modifying a resource
+                    * registration of worker nodes
+            * all other components interact through with it
+                * example
+                    * kubelet (on worker nodes)
+                    * controller-manager,
+                    * external clients like kubectl
+            * provides RESTful interface
+            * authenticates and authorizes
+        * Scheduler (kube-scheduler)
+            * assigns Pods to Nodes
+                * tries to spread Pods across available nodes
+                * doesn't enforce strict Pod spreading rules
+                    * unless specific affinity or anti-affinity rules are applied
+                        * example
+                            * affinity: run on nodes labeled as having SSD disks
+                            * anti-affinity: not run on nodes labeled as having a GPU
+                    * most Kubernetes platforms enable default Pod-spreading policies
+                        * example: across multiple zones
+            * scheduling is an optimization problem:
+                1. filtering
+                    * goal: determine feasible placements (placements that meet given constraints)
+                    * filters out the worker nodes that cannot host the pod for some reason
+                        * example: CPU and Memory requests
+                    * output: nodes on which pods can be scheduled
+                        * length == 0 => pod will remain pending till this condition is remedied
+                        * length == 1 => scheduling can occur without any actions
+                        * length > 1 => moves to the next stages of scheduling
+                1. scoring
+                    * goal: determine viable placements (feasible placements with the highest score)
+                    * example of rules used for evaluation:
+                        * node affinity and anti-affinity
+                        * does the node have a container image already?
+                            * no image => it will take time to pull it
+                        * lower workload utilization will give you a higher result
+                    * output: node with the highest score is selected for the scheduling of Pod
+            * `topologySpreadConstraints`
+                * automatically spread workloads across different topologies
+                    * example: nodes, zones, racks, regions
+        * etcd
+            * rationale: Kubernetes is distributed => it needs a distributed database
+            * distributed key-value store
+            * store all k8s data
+                * anything you might read from a `kubectl get xyz` command is stored in etcd
+                * any change you make via `kubectl create` will cause an entry in etcd to be updated
+                * any node crashing or process dying causes values in etcd to be changed
+            * stores actual state of the system and the desired state of the system
+                * if diverge => reconciliation
+            * provides events on changes happening to its keys
+                * exposed over the watch API
+                * Kubernetes uses it to monitor changes
+                    * controllers (e.g., Deployment, ReplicaSet controllers)
+                        * ensure that the cluster's actual state matches the desired state
+        * Controller Manager (controller-manager)
+            * resource that manages other resources
+            * contains many resource controllers: replication controller, endpoints controller, namespace controller, etc
+            * compares current state to the desired state of its resources, and makes any changes necessary
+                * watches for changes in a specific Kubernetes resource using the watch API exposed by the api-server
+                in a never-ending for loop called the control loop
+            * use a label selector to identify the resources they manage
+                * simple key-value pairs
+                * used to loosely couple resources
+                * example
+                    * Deployment's spec has a `selector.matchLabels` section
+                    * PodSpec has a `metadata.labels` section
+                    * reason: we need a way to reference Pod from the Deployment
+                        * Pod object actually exists somewhat separately after creation
+                    * why it cannot be referenced out of the box as PodSpec is part of Deployment?
+                        * Pods may be needed in other objects
+                            * in particular: network Service references Pod directly, not Deployment
 * Minion (Worker Node)
-    * components that execute the decisions made by Control Plane
+    * components
         ![alt text](img/worker-node.png)
     * Pod
         * a unit of compute, which runs on a single node in the cluster
@@ -228,12 +230,13 @@
         * like a separate logical machine
             * with its own IP, hostname, processes, and so on
                 * `kubectl get pods <pod-name> -o wide`
-            * own network namespace
-                * no port conflict between Pods
-                * example: multiple Pods can run a container on port 80
+            * in particular: multiple Pods can run a container on port 80
+                * example
+                    * Pod 1: 10.1.1.5:80
+                    * Pod 2: 10.1.1.6:80
             * consists of 1+ containers in the same Linux namespace(s)
                 * all the containers in a pod will appear to be running on the same logical machine
-                    * containers in other pods, even on the same worker node, will appear to be running on a different one
+                * containers in other pods, even on the same worker node, will appear to be running on a different one
         * can communicate with all other Pods in the cluster directly (over virtual network)
             * without needing NAT (Network Address Translation)
     * kubelet
@@ -259,33 +262,31 @@
     * kube-proxy
         * runs on each node
         * overcomes the problem of Pods’ IPs being changed each time a Pod is recreated
-        * configuration of request routing on the OS level is done by configuring the IP tables of the OS
-            * configuration of IP tables is done by the kube-proxy
-                * doesn’t receive the actual traffic or do any load balancing
-                * translates Service definitions into networking rules as NAT (Network Address Translation)
-                    * NAT rules are simply mappings from Service IP to Pod IP
-                        * example: traffic sent to a Service => redirected to a backend Pod
-                            * NAT rules pick one of the Pods according to used mode
-                                * iptables -> random, IPVS -> algorithm
-                    * example
-                        1. KUBE-SERVICES is a custom chain created by Kube-Proxy for the Services
-                            ![alt text](img/kube-proxy/iptables-root.png)
-                        1. traffic destined to the Service will enter appropriate chain
-                            ![alt text](img/kube-proxy/iptables-routing.png)
-                            * example: notice a specific chain created with a rule for destination IP of the Service (10.99.231.137)
-                        1. NAT rules
-                            ![alt text](img/kube-proxy/iptables-nat.png)
-                            * notice this statistic mode random probability
-                            * KUBE-SEP correspond to the Service endpoints (SEP)
-                                * contains IP address of each Pod listed for each chain
+        * traffic director, not a handler
+            * delegates the actual load balancing to the iptables NAT rules or IPVS virtual servers
+        * configuration of IP tables is done by the kube-proxy
+            * doesn’t receive the actual traffic or do any load balancing
+                * traffic flows directly through the kernel without involving kube-proxy
+            * translates Service definitions into networking rules as NAT (Network Address Translation)
+                * maintains all Service definitions (mappings from Service IP to Pod IP)
+                * example
+                    1. `KUBE-SERVICES` (handles Service IP lookups) is a custom chain created by Kube-Proxy for all Services
+                        ![alt text](img/kube-proxy/iptables-root.png)
+                    1. `KUBE-SVC-XXXXX` maps Service to KUBE-SEP (Service Endpoint)
+                        ![alt text](img/kube-proxy/iptables-routing.png)
+                        * example: notice a specific chain created with a rule for destination IP of the Service (10.99.231.137)
+                    1. `KUBE-SEP-YYYYY` maps Service Endpoint to the Pod IP
+                        ![alt text](img/kube-proxy/iptables-nat.png)
+                        * contains only one address, and that address corresponds to a single Pod IP and port
         * modes
             * iptables
                 * default and most widely used
                 * relies on a Linux feature called iptables
                     * core feature of almost every Linux operating system
                 * uses a sequential approach going through its tables
-                    * it was originally designed as a packet filtering component
-                    * number of lookups increases linearly by increasing the rules
+                    * examples
+                        * Service Lookup (KUBE-SERVICES) - O(N)
+                        * Endpoint Lookup (KUBE-SVC) - O(M)
                 * doesn’t support specific load balancing algorithms
                     * uses a random equal-cost way of distribution
             * IPVS (IP Virtual Server)
