@@ -299,15 +299,18 @@
         * optional component in managed Kubernetes
             * example: GKE Autopilot
 ## resources
+* Kubernetes resource
+    * type in Kubernetes
+    * example: Pod, Service, Deployment
 * Kubernetes objects
-    * are persistent entities in the Kubernetes system
-        * represent the state of the cluster
+    * instance of a resource
+        * example: specific Pod named nginx-pod, a Service web-svc
     * lifecycle can be managed with CRUD commands
         * `kubectl create`, `kubectl get`, `kubectl apply`, and `kubectl delete`
     * is a "record of intent"
-        * specification for the desired state of the system
-        * system will work to ensure the current state matches the desired state defined by these objects
+        * defines desired state of the system
             * example: Pod is just logical grouping - it does not exist physically
+            * k8s will continuously monitor and adjust the system to ensure that reality matches declaration
     * ownership
         * when controller is deleted, its managed objects still exist but not for long
             * Kubernetes runs a garbage collector process
@@ -316,37 +319,42 @@
 * Namespace
     * uses to group other resources
         * example
-            * one namespace per product, one per team, or a single shared namespace
+            * one namespace per product
+            * one per team
+            * single shared namespace
     * every resource lives inside a namespace
     * forms logical separation
-        * provides isolation by name
-            * example: pod named `web-app` in both `namespace-a` and `namespace-b`
-        * do not create hard, physical boundaries
-            * Role-Based Access Control (RBAC) for control access to resources at the namespace level
+        * name of a Pod (or any other Kubernetes object) must be unique within a namespace
+            * but names can be reused across different namespaces without any conflicts
+    * do not create hard, physical boundaries
         * example: pods in different namespaces can communicate with each other by default
-    * four initial namespaces:
+        * Role-Based Access Control (RBAC) for control access to resources at the namespace level
+    * initial namespaces
         * default: objects with no other namespace
         * kube-system: objects created by the Kubernetes system
             * example: control plane (API server, controller manager, etc.)
-        * kube-public: readable by all users (including those not authenticated)
-            * mostly unused by default
-            * use case: making cluster-wide, publicly accessible information available without authentication
         * kube-node-lease: used to manage NodeLease objects
-            * each node in the cluster periodically updates its lease object
-                * used by the control plane to determine the availability of nodes
+            * NodeLease is essentially a heartbeat that each node periodically updates
+                * allows the Kubernetes control plane to know if a node is still active or unresponsive
+            * Kubelet creates the Lease Object (if not already present)
             * helps improve the performance and scalability of large clusters
                 * reducing load on etcd
+                * earlier Kubernetes versions: node heartbeats were directly updated as part of the Node object
+                    * Node object updates are heavyweight and expensive, containing a lot of metadata
+        * kube-public: readable by all users (including those not authenticated)
+            * mostly unused
+            * use case: making cluster-wide, publicly accessible information available without authentication
+
 ## deploying workloads
-* are all controllers
-    * example: Deployment reads spec and creates a ReplicaSet
+* all workloads are implemented as controllers
 * Deployment
     * steps
         ![alt text](img/deployment-steps.png)
-    * rationale: instructing Kubernetes to run Pods directly is not safe
+    * rationale: create a Pod manually using a YAML is not safe
         * no automatic rescheduling
             * rebooted if crash, but not in case of node failure
         * no rolling updates or rollbacks
-        * no scaling
+        * no built-in scaling
     * strategy types
         * RollingUpdate
             * default deployment strategy
@@ -358,38 +366,34 @@
                 * maxUnavailable
                     * how many Pods can be unavailable
                         * more Pods can be replaced at once
-                    * tradeoff: higher the value => faster rollout but temporarily reducing the  number of ready Pods
-                    * rollout could coincide with another event that lowers availability
+                    * tradeoff: higher the value => faster rollout but temporarily reducing the number of ready Pods
+                    * rollout could happen with another event that lowers availability
                         * example: node failure
         * Recreate
             * terminates all existing Pods before creating new ones
             * use case: applications that cannot tolerate having multiple versions running simultaneously
             * cons: downtime
-    * technically, a deployment in Kubernetes is made of resources: Pods + Replica-Set
-        * manages a ReplicaSet, which in turn manages the Pods
-            ```
-            spec:
-              replicas: 1
-              selector:
-                matchLabels:
-                  app: customerinfo-app
-            ```
-        * Pod object template is referred as the PodSpec
-            ```
-            spec:
-              ...
-              template:
-                metadata:
-                  labels:
-                    app: customerinfo-app
-                spec:
-                  containers:
-                    - name: customerinfo-app
-                      image: customerinfo-app:0.0.1-SNAPSHOT
-            ```
+    * example
+        ```
+        spec:
+          replicas: 3
+          selector: Number of Pod replicas (ReplicaSet)
+            matchLabels: // Selector for matching Pods
+              app: nginx
+          template: // Pod template (defines how Pods should be created)
+            metadata:
+              labels: // Pod label (used by ReplicaSet)
+                app: nginx
+            spec: // Pod specification
+              containers:
+              - name: nginx
+                image: nginx:1.21
+                ports:
+                - containerPort: 80
+        ```
 * ReplicaSet
-    * Deployments should be first choice for defining applications
-        * don't use ReplicaSets directly
+    * should no be used directly
+        * Deployments should be first choice for defining applications
     * constantly runs a control loop: #(objects it owns) == #(replicas it should have)
 * Job, CronJob
     * use case: batch processing, periodic tasks
@@ -400,17 +404,16 @@
             * Pod won’t be restarted
             * isn’t deleted when it completes - logs could be examined
         * should have liveness probes
-            * we can ignore readiness
-                * no Service that they can be added/removed based on readiness
+            * readiness can be ignored - they do not serve incoming traffic
     * vs Deployment
         * Job - tasks that are expected to complete (don’t need to run continuously)
         * Deployment - continuous application
             * doesn’t have the notation of a Pod "completing"
-    * replacement for `kubectl exec` on an existing Pod
-        * `kubectl exec` task is sharing the resources with the Pod
-            * affecting the performance
-            * Pod may not have enough resources to handle both
-        * moving tasks to a Job => their own Pod with their own resource allocation
+    * replacement for task executed with `kubectl exec` on an existing Pod
+        * example: inspecting a Log File Inside a Pod
+        * `kubectl exec` affects performance of the Pod
+            * Pod may not have enough resources handle his responsibilities and `exec` task
+                * solution: moving tasks to a Job
     * Job is Completed (by terminating with an exit status of success) => work is done
     * CronJob is a Job controller, which creates Jobs on a set interval
         * you can do anything in a CronJob that you can do in a Job
@@ -421,7 +424,7 @@
     * rationale: data-heavy apps typically expect to run in a stable environment
         * Kubernetes is a dynamic environment
     * creates Pods with predictable names
-        * created in order from zero up to n
+        * created in order from 0 up to n
             * started in order
                 * previous Pod needs to be up and running before next is created
             * removed in the reverse order
@@ -430,17 +433,16 @@
     * vs Deployment
         * in the ReplicaSet, there is no way to identify a single Pod
             * all Pods share the same specification
-    * can use this uniqueness and guaranteed ordering to assign different roles to the different unique Pods
+    * used to assign roles to the different unique Pods
         * example: primary instance and one or more secondaries
             * you might be able to scale the secondaries
-                * but they all need to reach the primary
-                    * for example to synchronize their own data
+                * but they all need to reach the primary (to synchronize their own data)
             * solution: Pod runs a script at startup, which checks to see if it is Pod 0
                 * if it is, the Pod sets itself up as the primary
                 * next Pod doesn’t start until Pod 0 is running
                     * same startup script tells Pod it is not the primary
                     * it sets itself as a secondary and synchronizes data from Pod 0
-    * often used with headless Service
+    * often used with headless Service (service that does not have a ClusterIP address)
         * each Pod in the StatefulSet is unique => useful to be able to address them individually
 * DaemonSet
     * runs a single replica of a Pod on every node in the cluster
@@ -464,11 +466,28 @@
     * network address discovery mechanism
         * provides and maintains a network identity for Pod resource
     * has internal, cluster-local IP address and DNS record
+        * ClusterIP itself does not handle any requests
+            * k8s sets up iptables (or IPVS) rules on every node that map the ClusterIP to actual pod IPs
         * exception: headless Services
         * IP address is static for the life of the Service
         * can be referenced by other Pods
         * within a namespace, Services are available using a simple domain name
             * other namespaces: `<service-name>.<namespace>.svc.cluster.local`
+    * what the service controller does
+        1. gets the list of pods that matches the selector field
+        1. iterates over the pod list and notes down the IP address of the pod
+        1. creates an internal static IP address called the clusterIP
+        1. creates a new K8s resource called Endpoint
+            * clusterIP to od IPs
+            * one-to-one mapping between a Service and an Endpoint object
+                * vs Service
+                    * Service object defines how to access a group of pods (like through a ClusterIP, NodePort, or LoadBalancer)
+                        * it does not manage which pods are part of the service => Endpoint object does this
+                * Endpoint Slices are a more scalable and efficient way to manage endpoints
+                    * introduced in Kubernetes 1.16
+                    * multiple smaller Endpoint Slice objects are created
+                        * each representing a portion of the endpoints
+            * pods get created/destroyed => responsibility of the service controller to update the endpoint resource
     * spreads the load across the Pods
         * not linked directly to pods
             * contain a list of Endpoints (IPs and ports)
@@ -495,6 +514,11 @@
             * used for: internal traffic
             * provides static virtual IP address in the cluster
                 * addressable from any Pod within your cluster
+        * addition: headless service
+            * indicated by the clusterIP: None
+            * no virtual cluster IP created to balance traffic
+            * querying the Service will return multiple A Records (Address Records)
+                * allows clients to directly address specific Pods            
         * NodePort
             * used for: external traffic
                 * usually in development environments
@@ -523,35 +547,26 @@
                 * not much difference
                     * rule of thumb: use the LoadBalancer service first
                 * some automation being done in LoadBalancer
-            * what the service controller does
-                1. gets the list of pods that matches the selector field
-                1. iterates over the pod list and notes down the IP address of the pod
-                1. creates an internal static IP address called the clusterIP
-                1. creates a new K8s resource called Endpoint which basically maps a single IP to multiple IPs
-                    * single IP here is the clusterIP, and the multiple IPs correspond to the pod IPs
-                    * one-to-one mapping between a Service and an Endpoint object
-                        * Endpoint Slices are a more scalable and efficient way to manage endpoints
-                            * introduced in Kubernetes 1.16
-                            * multiple smaller Endpoint Slice objects are created
-                                * each representing a portion of the endpoints
-                    * has an endpoints column that is a collection of IP:port pairs
-                    * pods get created/destroyed => responsibility of the service controller to update the endpoint resource
-                1. exposes a random port (ranging from 30000-32768) on the worker node
-        * problem: expose more than one application => multiple NodePort / LoadBalancer Services
-            * with each NodePort service you need to deal with the hassle of manually managing the IPs and ports
-            * with each LoadBalancer service, you go on increasing your cloud bill
+        * problem: exposing more than one application => multiple NodePort / LoadBalancer Services
+            * NodePort => manually track the IPs and ports (random high port) for each service
+            * LoadBalancer => Cloud providers (AWS, GCP, Azure) charge per load balancer
+                * do not need to manually track the ports because they are typically standardized (like HTTP on port 80
             * solution: Ingress
-        * addition: headless service
-            * indicated by the clusterIP: None
-            * no virtual cluster IP created to balance traffic
-            * querying the Service will return multiple A Records (Address Records)
-                * allows clients to directly address specific Pods
 * Ingress
     * rationale: layer-7 (L7) load balancer
-        * Service Load Balancer
-            * is layer-4 (L4) load balancer
-                * balances requests at the network layer (e.g., TCP, UDP, SCTP)
-            * only able to direct toward one service
+        * operates at the Application Layer
+            * protocol: HTTP, HTTPS, WebSockets
+            * routing and load balancing decisions based on application-level data
+                * example: HTTP headers, Hostnames, URL paths, Cookies
+        * Service Load Balancer is layer-4 (L4) load balancer
+            * protocol: TCP, UDP
+            * routing and load balancing decisions based on network layer information
+                * example: based on the destination IP and port, the load balancer determines the backend server 
+                to forward the traffic to
+    * use case: basic web traffic management, HTTP/HTTPS routing, and SSL termination
+        * complex microservice architectures: API Gateway
+            * example: Kong, Istio
+            * digression: Ingress Controllers (external clients) and API Gateways (microservices) often coexist
     * overview
         ![alt text](img/ingress/fan-out.png)
         * typical Kubernetes application has pods running inside a cluster and a network load balancer (NLB) outside
@@ -561,32 +576,35 @@
             * example: access api.example.com
                 1. DNS Resolution
                     * api.example.com is resolved to the IP address of the Ingress Controller's external load balancer
-                1. load balancer forwards the HTTP request to the Kubernetes Ingress Controller
+                1. NLB forwards the request to the NodePort exposed by the Ingress Controller Service
+                    * NLB is within the same VPC as NodePorts
+                    * cloud provides NLB, VPC and firewall that blocks any traffic apart from NLB automatically
                 1. routing decision + service discovery
                     * example: Service of type ClusterIP
                 1. pod selection and routing
                     * Service forwards the request to one of the available Pods
     * components
+        * analogy
+            * Ingress controller ~> nginx webserver
+            * Ingress Resource ~> `nginx.conf` file
         * Ingress Controller
-            * smart proxy running in K8s
-            * can be placed in any namespace
-                * automatically detect Ingresses defined in other namespaces
-                    * based on field `ingressClassName`
-            * specialized load balancer running in cluster that handles the routing based on the Ingress rules
-                * actual implementation of the Ingress API
-            * can be a software load balancer, external hardware load balancer, or cloud load balancer
-                * each type requiring different controller implementations
-            * could be more than one Ingress Controller at the same time in a Kubernetes cluster
-                * Kubernetes supports a resource named `IngressClass` that contains which controller it refers to
-                * example: different controllers for development, staging, and production
-            * examples
-                * AKS Application Gateway Ingress Controller
+            * is not in kube-controller-manager
+                * k8s delegates the management of Ingress resources to custom Ingress Controllers
+            * example
+                * NGINX or Traefik
                 * Istio Ingress
-                * Kusk Gateway
-                * NGINX Ingress Controller For Kubernetes
+                * AKS Application Gateway Ingress Controller
+            * smart proxy running in K8s
+                * based on the Ingress rules
+            * can be placed in any namespace
+                * typically designed to be cluster-wide
+                * example: NGINX Ingress Controller is often installed in the ingress-nginx namespace 
+                * automatically detect Ingresses defined in other namespaces
+                    * watch all namespaces: `--watch-namespace=""`
+                    * `ingressClassName` contains which controller it refers to
+                        * it can be more than one Ingress Controller at the same time in a Kubernetes cluster
         * Ingress Resource
-            * describes the desired state for exposing services to the outside of the Kubernetes cluster
-            * set of routing rules that determine how to route incoming requests to different services within the cluster
+            * defines rules for routing external HTTP/HTTPS traffic to services within a Kubernetes cluster
                 * host-based routing
                     * example
                         * typical HTTP GET
@@ -602,15 +620,11 @@
                     * example
                         * requests with the URI that starts with `/serviceA` to service A
                         * requests with the URI that starts with `/serviceB` to service B
-            * should be created in the same namespace where the corresponding K8s Service resides
-        * analogy
-            * Ingress Resource ~> `nginx.conf` file
-            * Ingress controller ~> nginx webserver
-    * needs Service (NodePort/LoadBalancer) in front of it to expose it
-        * NodePort: allows external traffic to access the service via any node's IP
-        * LoadBalancer: exposes the service externally with a public IP address
-            * commonly used in cloud environments (like AWS, GCP, or Azure)
-                * cloud provider creates a Load Balancer in front of Ingress controller to route traffic into the cluster
+            * must be created in the same namespace where the corresponding K8s Service resides
+                * Ingress in one namespace cannot reference services in another
+                * reason: uses the namespace of the Ingress resource as the scope to find the service
+                    * cross-namespace lookups are not performed even using the fully qualified domain name (FQDN) 
+                    of the service
     * pros
         * single point of entry
             * centralizing
@@ -618,19 +632,19 @@
                 * load balancing
                     * expose multiple services under the same IP address
                 * secure access, certificate management
-                    * may result in performance gains: so-called TLS terminator
-                        * handle the TLS connection and rest of backend communication is done only over
-                        HTTP via a secure network
-                        * there is no option to pass the unmodified encrypted traffic directly to the backend
-                            * can re-encrypt traffic and connect to your services over HTTPS
+                * may be used as TLS terminator
+                    * rest of backend communication is done only over HTTP via a secure network
+                        * performance gains
+                    * can re-encrypt traffic if needed
             * decreases the attack surface of the cluster
+        * can be used to implement canary deployments
         * cloud cost cut
             * rationale: cloud providers often charge based on how many load-balancing external IP addresses are assigned
                 * Ingress combines several services into one
                     * rather than each being exposed with its own IP
-                * example: AWS Kubernetes (EKS) + AWS Load Balancer Ingress Controller => each Ingress creation will provision an AWS Load Balancer
+                * example: AWS Kubernetes (EKS) + AWS Load Balancer Ingress Controller => each Ingress creation 
+                will provision an AWS Load Balancer
                     * they charge for each Load Balancer and public IP address
-        * can be used to implement canary deployments
     * Ingress vs Egress
         * analogy: immigration and emigration
         * Ingress: incoming traffic to cluster
@@ -638,7 +652,7 @@
         * egress: outgoing traffic from cluster
             * mechanism of establishing connections to resources outside the cluster
                 * example: databases, APIs etc
-            * managed through network policies, firewall rules, or other networking configurations
+            * managed through networking configurations (network policies, firewall rules, etc)
                 * example: block any outgoing external communication apart to kafka
                     * global block all egress policy
                         ```
@@ -675,10 +689,6 @@
                                 - protocol: TCP
                                   port: 9092  # Default Kafka port for communication
                         ```
-    * vs Kubernetes API Gateway
-        * more comprehensive solution for managing external access to services
-            * support for various protocols and advanced traffic management features
-                * example: authentication, rate limiting, request/response transformation, monitoring, and caching
 ### Config
 * Kubernetes supports configuration injection with two resource types: `ConfigMaps` and `Secrets`
 * `ConfigMap`
